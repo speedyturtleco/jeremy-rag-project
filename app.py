@@ -85,7 +85,7 @@ if not st.session_state.messages:
         st.markdown("- *Is Amazingzon Amazon still a buy?*")
     with col2:
         st.markdown("- *What is Jeremy's GVD?*")
-        st.markdown("- *What video tell about his Flapjack Flipping Hotel?*")
+        st.markdown("- *What videos tell about the Flapjack Flipping Hotel?*")
         st.markdown("- *What does buy the dip, never trip mean?*")
     st.divider()
 

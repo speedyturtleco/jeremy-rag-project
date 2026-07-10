@@ -70,7 +70,9 @@ def ask_jeremy(question, context_chunks):
 
 st.markdown("# Ask Jeremy 📈")
 st.markdown('<p class="subtitle">AI-powered insights from Jeremy Lefebvre\'s YouTube content</p>', unsafe_allow_html=True)
-st.markdown('<p class="subtitle"><em>"Buy the dip, never trip" — Jeremy Lefebvre</em></p>', unsafe_allow_html=True)
+git add .
+git commit -m "Remove buy the dip from subtitle"
+git push
 st.divider()
 
 if 'messages' not in st.session_state:

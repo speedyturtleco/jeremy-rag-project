@@ -101,7 +101,7 @@ if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
             if chunks:
                 answer = ask_jeremy(prompt, chunks)
             else:
-                answer = "I couldn't find relevant information in Jeremy's transcripts for that question."
+                answer = "Holy smokas... this ain't no jokas — I couldn't find anything on that one! Try rephrasing your question. 🤷"
             st.markdown(answer)
     st.session_state.messages.append({'role': 'assistant', 'content': answer})
 

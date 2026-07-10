@@ -76,6 +76,7 @@ if 'messages' not in st.session_state:
     st.session_state.messages = []
 
 if not st.session_state.messages:
+    st.markdown("### Ladies and gentlemen... 👋")
     st.markdown("**Try asking:**")
     col1, col2 = st.columns(2)
     with col1:

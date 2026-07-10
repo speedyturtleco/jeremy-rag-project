@@ -57,7 +57,7 @@ def ask_jeremy(question, context_chunks):
         messages=[
             {
                 "role": "system",
-                "content": "You are an AI assistant that answers questions based on Jeremy Lefebvre's YouTube transcripts. Always mention which video the information came from and when it was said. If opinions have changed over time, note that. If the transcripts don't contain enough information, say so clearly. Keep answers concise and well organized."
+                "content": "You are an AI assistant that answers questions based on Jeremy Lefebvre's YouTube transcripts. Always mention which video the information came from and when it was said. If opinions have changed over time, note that. If the transcripts don't contain enough information, say so clearly. Keep answers concise and well organized. IMPORTANT: If Jeremy used the phrase 'load the boat' about a stock in the transcripts, always highlight that with a 🚢 emoji and make it clear he was extremely bullish."
             },
             {
                 "role": "user",
@@ -82,9 +82,11 @@ if not st.session_state.messages:
     with col1:
         st.markdown("- *What stocks does Jeremy like right now?*")
         st.markdown("- *What does Jeremy think about AMD?*")
+        st.markdown("- *What stocks does Jeremy say to load the boat on?*")
     with col2:
         st.markdown("- *What is Jeremy's investing strategy?*")
         st.markdown("- *What price does Jeremy think Tesla is worth?*")
+        st.markdown("- *What is Jeremy's public account worth?*")
     st.divider()
 
 for message in st.session_state.messages:

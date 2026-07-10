@@ -99,7 +99,10 @@ if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
         with st.spinner('Flipping your flapjacks... 🥞'):
             chunks = search_transcripts(prompt)
             if chunks:
+                top_score = chunks[0].get('similarity', 0)
                 answer = ask_jeremy(prompt, chunks)
+                if top_score > 0.7:
+                    answer = "🔥 Holy smokas, this ain't no jokas!\n\n" + answer
             else:
                 answer = "Holy smokas... this ain't no jokas — I couldn't find anything on that one! Try rephrasing your question. 🤷"
             st.markdown(answer)

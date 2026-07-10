@@ -95,7 +95,7 @@ if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
     with st.chat_message('user'):
         st.markdown(prompt)
     with st.chat_message('assistant'):
-        with st.spinner('You got to be flipping my flapjacks... 🥞'):
+        with st.spinner('Flipping your flapjacks... 🥞'):
             chunks = search_transcripts(prompt)
             if chunks:
                 answer = ask_jeremy(prompt, chunks)

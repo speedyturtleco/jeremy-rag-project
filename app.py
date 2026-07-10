@@ -76,7 +76,7 @@ if 'messages' not in st.session_state:
     st.session_state.messages = []
 
 if not st.session_state.messages:
-    st.markdown("### Ladies and gentlemen... 👋")
+    st.markdown("### Ladies and gentlemen... ")
     st.markdown("**Try asking:**")
     col1, col2 = st.columns(2)
     with col1:
@@ -104,7 +104,7 @@ if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
                 if top_score > 0.7:
                     answer = "🔥 Holy smokas, this ain't no jokas!\n\n" + answer
             else:
-                answer = "Holy smokas... this ain't no jokas — I couldn't find anything on that one! Try rephrasing your question. 🤷"
+                answer = "Holy smokas, this ain't no jokas — I couldn't find anything on that one! Try rephrasing your question. 🤷"
             st.markdown(answer)
     st.session_state.messages.append({'role': 'assistant', 'content': answer})
 

@@ -73,3 +73,10 @@ Built by a first-time coder with Claude's help starting June 2026.
 - June 29: Downloaded 1000xstocks (33) and reaction channel (853)
 - July 1-2: Built embed/upload script, fixed Supabase connection
 - July 3: Built working chat interface with Groq, app live on phone!
+## 🧠 Smart Search Modes (HIGH PRIORITY)
+- [ ] Fix upload_date capture — critical for all temporal features
+- [ ] Mode 1: Recent search — "best stocks right now" → last 6-12 months only
+- [ ] Mode 2: Specific time period — "what was Jeremy buying in 2019?" → filter by year
+- [ ] Mode 3: Timeline/Evolution — "how has opinion changed?" → spread across all years
+- [ ] Mode 4: First mention + arc — "when did Jeremy start talking about Celsius?" → oldest to newest
+- [ ] Auto-detect which mode based on question keywords using Groq

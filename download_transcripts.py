@@ -43,7 +43,12 @@ def save_transcripts(transcripts, output_file):
 
 def get_transcript(video_id):
     try:
-        ytt = YouTubeTranscriptApi()
+        from youtube_transcript_api.proxies import GenericProxyConfig
+        proxy = GenericProxyConfig(
+            http_url=f"http://{os.getenv('DECODO_USERNAME')}:{os.getenv('DECODO_PASSWORD')}@gate.decodo.com:10000",
+            https_url=f"http://{os.getenv('DECODO_USERNAME')}:{os.getenv('DECODO_PASSWORD')}@gate.decodo.com:10000",
+        )
+        ytt = YouTubeTranscriptApi(proxy_config=proxy)
         transcript = ytt.fetch(video_id)
         full_text = ' '.join([t.text for t in transcript])
         if full_text and len(full_text.split()) > 100:
@@ -68,7 +73,7 @@ def process_channel(channel_url, channel_name, video_type='direct'):
             print(f"Skipping {i+1}/{len(videos)}: {video['title']} (already have it)")
             continue
         print(f"Processing {i+1}/{len(videos)}: {video['title']}")
-        time.sleep(random.uniform(8, 15))
+        time.sleep(random.uniform(5, 10))
         transcript = get_transcript(video['id'])
         if transcript:
             existing[video['id']] = {

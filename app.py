@@ -19,7 +19,7 @@ def get_db_connection():
 
 model = load_model()
 
-def search_transcripts(query, limit=5):
+def search_transcripts(query, limit=10):
     embedding = model.encode(query).tolist()
     conn = get_db_connection()
     cursor = conn.cursor()

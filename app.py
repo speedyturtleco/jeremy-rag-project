@@ -13,15 +13,11 @@ groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 def load_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
 
-@st.cache_resource
-def get_db_connection():
-    return psycopg2.connect(os.getenv("NEON_DATABASE_URL"))
-
 model = load_model()
 
 def search_transcripts(query, limit=10):
     embedding = model.encode(query).tolist()
-    conn = get_db_connection()
+    conn = psycopg2.connect(os.getenv("NEON_DATABASE_URL"))
     cursor = conn.cursor()
     cursor.execute(
         'SELECT title, channel, video_type, upload_date, url, speaker_verified, chunk_text, 1 - (embedding <=> %s::vector) AS similarity FROM transcripts WHERE 1 - (embedding <=> %s::vector) > 0.3 ORDER BY similarity DESC LIMIT %s',

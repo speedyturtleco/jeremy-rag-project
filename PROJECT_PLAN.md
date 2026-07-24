@@ -26,7 +26,9 @@ Long-term vision: multi-creator consensus tracker, "Speedy Turtle Co" product.
 - Groq API `llama-3.3-70b-versatile` for AI responses (free tier)
 - Streamlit for chat interface, deployed on Streamlit Community Cloud (free)
 - GitHub for code storage
-- Files: `download_transcrips.py` (note misspelled filename), `embed_and_upload.py`, `app.py`
+- Files: `download_transcrips.py` (note misspelled filename), `embed_and_upload.py`, `app.py`,
+  `auto_update.py` + `requirements-auto-update.txt` + `.github/workflows/auto_update.yml`
+  (daily automated new-video check via GitHub Actions — see Feature 3 below)
 
 ## CHANNELS
 - Financial Education (@FinancialEducation) — main channel, direct opinions ✅ downloaded+uploaded
@@ -118,8 +120,55 @@ This is the ONLY feature needing NEW data. Keep separate, do LAST.
 
 ---
 
+## FEATURE 3: AUTOMATED DAILY NEW-VIDEO CHECK  ✅ LIVE (built Jul 23)
+Runs automatically once a day via GitHub Actions — no manual downloading needed anymore for
+staying current on new uploads.
+
+- **Files:** `auto_update.py` (repo root), `requirements-auto-update.txt` (repo root),
+  `.github/workflows/auto_update.yml` (workflow config).
+- **Schedule:** daily at 10:00 UTC = 5:00 AM EST (winter) / 6:00 AM EDT (summer). GitHub Actions
+  cron is fixed UTC and does NOT shift for daylight saving — accept the 1hr drift or manually
+  flip the cron value twice a year if it matters.
+- **Manual trigger also available:** GitHub.com → repo → Actions tab → "Auto-check for new
+  Jeremy videos" → "Run workflow" button (no desktop shortcut needed, per decision this session).
+- **Failure notifications:** GitHub automatically emails the repo owner if a scheduled run fails
+  — this is default behavior, no extra setup was needed.
+- **How it works (per channel, each run):**
+  1. List current channel videos (free, no Decodo cost — `extract_flat` listing only).
+  2. Check which video IDs are already in Neon (global distinct video_id query).
+  3. Take only the newest not-yet-uploaded videos, **capped at 5 per channel per run**
+     (`MAX_NEW_PER_CHANNEL_PER_RUN` in `auto_update.py`) — this is a deliberate safety limit so
+     a scheduled run can never accidentally bulk-backfill (e.g. reaction channel still has
+     ~800+ backlog videos not in Neon; those stay untouched unless run manually via
+     `download_transcrips.py`).
+  4. Download transcript for each new video (THIS is the only step that costs Decodo bandwidth).
+  5. Chunk (same 500-word/50-overlap logic) + embed + insert directly into Neon — no local JSON
+     file is kept (GitHub Actions runners are ephemeral; Neon is the sole source of truth for
+     "already have this video").
+- **First live run (Jul 23) results:** caught up on backlog since channels had never been
+  checked before — 14 new videos found across all 3 channels (4 Financial Education, 5
+  1000xstocks, 5 reaction), 461 chunks uploaded total. One transcript hit a transient
+  block on attempt 1, succeeded on retry (existing retry logic worked as designed).
+  Going forward, daily runs should find far fewer (0–2ish) new videos per day, not 14.
+- **Decodo cost:** confirmed this routes through the Decodo proxy same as manual downloads.
+  The 14-video catch-up run cost an estimated ~10–15MB — small relative to the 3GB Decodo plan.
+  Ongoing daily cost should be even smaller once there's no backlog to catch up on.
+- **⚠️ Known gotcha hit during setup:** dragging files into folders in Windows/VS Code produced
+  0-byte empty files on GitHub (happened to ALL THREE files: the yml, the requirements file,
+  and auto_update.py). Symptom was workflow runs finishing in ~4–12 seconds with the log
+  showing "No event triggers defined in `on`" or a silent no-op pip install. Fixed by editing
+  each file directly in GitHub's web editor and pasting full contents in. If editing these
+  files again locally, verify file size before pushing (don't trust drag-and-drop blindly).
+- **Setup requires 4 GitHub repo secrets** (Settings → Secrets and variables → Actions):
+  `DECODO_USERNAME`, `DECODO_PASSWORD`, `NEON_DATABASE_URL`, `COOKIES_TXT` (full raw contents
+  of local cookies.txt, pasted as-is — no `=` signs, no quotes, just the value).
+- **Maintenance note:** `cookies.txt` / the `COOKIES_TXT` secret will go stale eventually
+  (YouTube session cookies expire) — when a scheduled run fails for this reason, the failure
+  email will surface it; re-export cookies.txt locally and update the secret value.
+
+---
+
 ## 💡 FUTURE FEATURES (from roadmap)
-- Automatic new-video detection + download (daily scheduler)
 - WhisperX speaker diarization for reaction channel (index only Jeremy's lines; optionally store
   guest opinions separately so users can ask "what did guests say about Tesla")
 - Conflict detection (flag when Jeremy changed his mind on a stock)
@@ -160,6 +209,9 @@ This is the ONLY feature needing NEW data. Keep separate, do LAST.
 - Confirmed chunks have upload_date FIELD but must VERIFY it's actually populated in Neon.
 - Locked decisions: over-time buckets = BY YEAR; "what to buy" = meaning search + recency
   (no keyword lists).
+- ✅ Feature 3 (automated daily new-video check) built, tested, and LIVE as of Jul 23 — see
+  Feature 3 section above for full details. This was NOT on the critical path for Feature 1,
+  so the verification step below is still the next real blocker.
 - **NEXT ACTION:** Step 0 — verify upload_date is populated in the Neon DB (quick query),
   THEN build router skeleton + Mode 3 (over-time, year-bucketing) in `app.py`.
 
@@ -177,3 +229,12 @@ This is the ONLY feature needing NEW data. Keep separate, do LAST.
   transcript (IP/proxy block on that specific video).
 - (this session) merged roadmap into master plan; refined Mode 1 (meaning search) + Mode 3
   (year buckets).
+- Jul 23: built Feature 3 — automated daily new-video check via GitHub Actions. Decided against
+  desktop shortcuts in favor of GitHub.com's built-in "Run workflow" manual trigger button;
+  relying on GitHub's default failure-email behavior (no custom notification code needed).
+  Settled on daily schedule (not 3x/week) at 5 AM EST / 10:00 UTC. Hit and fixed a drag-and-drop
+  bug that silently created 0-byte files for all 3 new files (yml, requirements, script) — fixed
+  via GitHub's web editor. First live run successfully caught up on 14 backlogged videos (461
+  chunks) across all 3 channels with zero manual intervention. Confirmed this uses Decodo
+  bandwidth (~10–15MB for the catch-up run) but should be minimal going forward on a daily
+  cadence. Feature 1 (search modes) remains the next real priority — untouched today.

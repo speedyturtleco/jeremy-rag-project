@@ -1,0 +1,5 @@
+yt-dlp
+youtube-transcript-api
+sentence-transformers
+psycopg2-binary
+python-dotenv

@@ -1,0 +1,34 @@
+name: Auto-check for new Jeremy videos
+
+on:
+  schedule:
+    # Daily at 10:00 UTC = 5:00 AM EST (winter) / 6:00 AM EDT (summer, DST).
+    # GitHub Actions cron is fixed UTC and does not shift for daylight saving.
+    - cron: '0 10 * * *'
+  workflow_dispatch: {}   # adds a manual "Run workflow" button on the Actions tab
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements-auto-update.txt
+
+      - name: Write cookies.txt from secret
+        run: echo "${{ secrets.COOKIES_TXT }}" > cookies.txt
+
+      - name: Run auto-update script
+        env:
+          DECODO_USERNAME: ${{ secrets.DECODO_USERNAME }}
+          DECODO_PASSWORD: ${{ secrets.DECODO_PASSWORD }}
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: python auto_update.py

@@ -126,9 +126,8 @@ def process_channel(channel_url, channel_name, video_type='direct'):
     return existing
 
 if __name__ == "__main__":
-    # STEP 2 TEST: 1000xstocks channel (33 videos, direct opinions)
-    channel_url = "https://www.youtube.com/channel/UCCmJVw9xQfYuuAAwZGedKRg/videos"
-    channel_name = "1000xstocks"
+    channel_url = "https://www.youtube.com/@FinancialEducation/videos"
+    channel_name = "Financial Education"
     process_channel(channel_url, channel_name, 'direct')
 
     # After the test works, you can run other channels by swapping these in:

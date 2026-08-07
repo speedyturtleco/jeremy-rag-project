@@ -41,7 +41,9 @@ def search_transcripts(query, limit=10):
 
 def ask_jeremy(question, context_chunks):
     context = '\n\n'.join([
-        f"[{c['channel']} | {c['upload_date'] or 'Unknown date'} | {c['url']}]\n{c['chunk_text']}"
+        f"[{c['channel']} | {c['upload_date'] or 'Unknown date'} | {c['url']} | "
+        f"{'Jeremy speaking, verified' if c['speaker_verified'] else 'UNVERIFIED SPEAKER - reaction video, may not be Jeremy'}]\n"
+        f"{c['chunk_text']}"
         for c in context_chunks
     ])
     response = groq_client.chat.completions.create(
@@ -49,7 +51,7 @@ def ask_jeremy(question, context_chunks):
         messages=[
             {
                 "role": "system",
-                "content": "You are an AI assistant that answers questions based on Jeremy Lefebvre's YouTube transcripts. Always mention which video the information came from and when it was said. If opinions have changed over time, note that. If the transcripts don't contain enough information, say so clearly. Keep answers concise and well organized. IMPORTANT: If Jeremy used the phrase 'load the boat' about a stock in the transcripts, always highlight that with a 🚢 emoji and make it clear he was extremely bullish."
+                "content": "You are an AI assistant that answers questions based on Jeremy Lefebvre's YouTube transcripts. Always mention which video the information came from and when it was said. If opinions have changed over time, note that. If the transcripts don't contain enough information, say so clearly. Keep answers concise and well organized. IMPORTANT: If Jeremy used the phrase 'load the boat' about a stock in the transcripts, always highlight that with a 🚢 emoji and make it clear he was extremely bullish. SPEAKER VERIFICATION: each excerpt is tagged either 'Jeremy speaking, verified' or 'UNVERIFIED SPEAKER - reaction video, may not be Jeremy'. These reaction videos are Jeremy reacting to or discussing someone else's content, so the opinion voiced may belong to a guest or the creator he's reacting to, not Jeremy himself. You may still use unverified excerpts to answer, but you must clearly flag them - e.g. '⚠️ from a reaction video, may not be Jeremy's own view' - and never present an unverified excerpt as Jeremy's confirmed opinion."
             },
             {
                 "role": "user",

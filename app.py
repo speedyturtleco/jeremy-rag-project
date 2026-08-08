@@ -9,6 +9,8 @@ load_dotenv()
 
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
+JEREMY_CHANNELS = ['Financial Education', 'Jeremy Lefebvre Makes Money']
+
 @st.cache_resource
 def load_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
@@ -103,21 +105,26 @@ for message in st.session_state.messages:
     with st.chat_message(message['role']):
         st.markdown(message['content'])
 
+
 if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
     st.session_state.messages.append({'role': 'user', 'content': prompt})
     with st.chat_message('user'):
         st.markdown(prompt)
     with st.chat_message('assistant'):
-        with st.spinner('Flipping your flapjacks... 🥞'):
-            chunks = search_transcripts(prompt)
+        chunks = search_transcripts(prompt)
+        top_channel = chunks[0].get('channel', '') if chunks else ''
+        is_jeremy = top_channel in JEREMY_CHANNELS
+        spinner_text = 'Flipping your flapjacks... 🥞' if is_jeremy else 'Digging through the transcripts... 🔍'
+        with st.spinner(spinner_text):
             if chunks:
                 top_score = chunks[0].get('similarity', 0)
                 answer = ask_jeremy(prompt, chunks)
                 if top_score > 0.5:
-                    answer = "🔥 Holy smokas, this ain't no jokas!\n\n" + answer
+                    if is_jeremy:
+                        answer = "🔥 Holy smokas, this ain't no jokas!\n\n" + answer
+                    else:
+                        answer = "🔥 Strong match found!\n\n" + answer
             else:
-                answer = "Holy smokas, this ain't no jokas — I couldn't find anything on that one! Try rephrasing your question. 🤷"
+                answer = "Couldn't find anything on that one! Try rephrasing your question. 🤷"
             st.markdown(answer)
     st.session_state.messages.append({'role': 'assistant', 'content': answer})
-
-st.markdown('<p class="footer">Based on Jeremy Lefebvre\'s public YouTube content · Not financial advice · "Buy the dip, never trip"</p>', unsafe_allow_html=True)

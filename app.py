@@ -82,7 +82,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("# Ask Jeremy 📈")
-st.markdown('<p class="subtitle">AI-powered insights from Jeremy Lefebvre\'s YouTube content</p>', unsafe_allow_html=True)
+st.markdown('<p class="subtitle">AI-powered insights from Jeremy Lefebvre, plus Eric Cuka\'s take</p>', unsafe_allow_html=True)
 st.divider()
 
 if 'messages' not in st.session_state:

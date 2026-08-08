@@ -126,18 +126,20 @@ def process_channel(channel_url, channel_name, video_type='direct'):
     return existing
 
 if __name__ == "__main__":
-    channel_url = "https://www.youtube.com/@FinancialEducation/videos"
-    channel_name = "Financial Education"
+    # Eric Cuka full backlog
+    channel_url = "https://www.youtube.com/@FiredUpWealth/videos"
+    channel_name = "Eric Cuka"
     process_channel(channel_url, channel_name, 'direct')
 
-    # After the test works, you can run other channels by swapping these in:
+    # Previously run (already downloaded — will skip existing videos if re-run):
     #
-    # Financial Education (already downloaded — will skip existing videos):
+    # 1000xstocks:
+    # channel_url = "https://www.youtube.com/channel/UCCmJVw9xQfYuuAAwZGedKRg/videos"
+    # channel_name = "1000xstocks"
+    # process_channel(channel_url, channel_name, 'direct')
+    #
+    # Financial Education:
     # channel_url = "https://www.youtube.com/@FinancialEducation/videos"
     # channel_name = "Financial Education"
     # process_channel(channel_url, channel_name, 'direct')
-    #
-    # Reaction channel (859 videos — the big one, run when ready):
-    # channel_url = "https://www.youtube.com/@jeremylefebvremakesmoney7934/videos"
-    # channel_name = "Jeremy Lefebvre Makes Money"
     # process_channel(channel_url, channel_name, 'reaction')

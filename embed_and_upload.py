@@ -83,8 +83,12 @@ def process_and_upload(json_file):
     print(f"✅ Done! Uploaded {total_chunks} new chunks, skipped {skipped} already uploaded")
 
 if __name__ == "__main__":
-    file = Path('transcripts_data/transcripts_Financial_Education.json')
-    process_and_upload(file)
+    files = [
+        Path('transcripts_data/transcripts_Jeremy_Lefebvre_Makes_Money.json'),
+        Path('transcripts_data/transcripts_Eric_Cuka.json'),
+    ]
+    for file in files:
+        process_and_upload(file)
     cursor.close()
     conn.close()
     print("\n🎉 Upload complete!")

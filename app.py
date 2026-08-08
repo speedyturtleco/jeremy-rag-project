@@ -91,13 +91,13 @@ if not st.session_state.messages:
     st.markdown("**Try asking:**")
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("- *Is ELF still on the shelf?*")
-        st.markdown("- *Should I load the boat on AMD?*")
-        st.markdown("- *Is Amazingzon Amazon a buy?*")
-    with col2:
-        st.markdown("- *What is Jeremy's GVD?*")
-        st.markdown("- *Which video tells about Jeremy's Flapjack Flipping Hotel?*")
-        st.markdown("- *What does buy the dip, never trip mean to Jeremy?*")
+    st.markdown("- *Is ELF still on the shelf?*")
+    st.markdown("- *Should I load the boat on AMD?*")
+    st.markdown("- *What does Eric think about buying stocks at all-time highs?*")
+with col2:
+    st.markdown("- *What is Jeremy's GVD?*")
+    st.markdown("- *What is Eric's F.I.R.E.D. Up philosophy?*")
+    st.markdown("- *What does buy the dip, never trip mean to Jeremy?*")
     st.divider()
 
 for message in st.session_state.messages:

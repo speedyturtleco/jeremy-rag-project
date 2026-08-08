@@ -1,5 +1,35 @@
 # Ask Jeremy — Master Project Plan & Memory File
 
+---
+## 🚦 START HERE — NEXT SESSION FIRST ACTION (updated Aug 6)
+
+**Check the terminal / VS Code first.** A bulk download of the reaction channel
+(~868 videos, via `download_transcrips.py`, through Decodo) was kicked off overnight and should
+be finished or close to it. Do this in order:
+
+1. **Check if `download_transcrips.py` finished running.** Look at the terminal output —
+   should end with "✅ Done! X total transcripts..." If it's still running, let it finish.
+   If it got interrupted/stopped, just re-run `python download_transcrips.py` — it resumes from
+   `transcripts_data/transcripts_Jeremy_Lefebvre_Makes_Money.json` and skips anything already saved.
+2. **That download is JSON-only — nothing has been embedded/uploaded to Neon yet.** Next step
+   is running `embed_and_upload.py` pointed at
+   `transcripts_data/transcripts_Jeremy_Lefebvre_Makes_Money.json` (currently the script's
+   `__main__` points at the Financial Education file — needs to be changed to point at the
+   reaction channel file before running).
+3. **After that's embedded**, replace `check_new_videos.py` with the updated version (already
+   has Eric Cuka's channel added — see below) and run it once to pull Eric's newest 5 videos
+   as a first test of his data.
+4. **Check Decodo usage** on the dashboard — the 9-day window mentioned this session may be
+   tight or expired by the time you're reading this. If the reaction channel download finished
+   using most of the remaining budget, this is likely the moment to actually cancel Decodo.
+5. Still outstanding from before: verify whether the original 25,127 Financial Education chunks
+   have real `upload_date` values or blanks (see DATA SITUATION section below) — this got
+   deprioritized this session in favor of the reaction channel bulk download but is still
+   the actual blocker for Feature 1 (smart search modes).
+
+---
+
+
 > **How to use this file:** This is the SINGLE SOURCE OF TRUTH for this project. Chats get
 > forgotten when closed; this file does not. At the start of any new chat, paste this whole file
 > in and say "here's my project plan, catch up." Keep it at:
@@ -28,13 +58,33 @@ Long-term vision: multi-creator consensus tracker, "Speedy Turtle Co" product.
 - GitHub for code storage
 - Files: `download_transcrips.py` (note misspelled filename), `embed_and_upload.py`, `app.py`,
   `auto_update.py` + `requirements-auto-update.txt` + `.github/workflows/auto_update.yml`
-  (daily automated new-video check via GitHub Actions — see Feature 3 below)
+  (daily automated new-video check via GitHub Actions — see Feature 3 below),
+  `check_new_videos.py` (NEW Aug 6 — manual, no-proxy, home-IP version of the daily check;
+  see Feature 3B below)
 
 ## CHANNELS
 - Financial Education (@FinancialEducation) — main channel, direct opinions ✅ downloaded+uploaded
 - 1000xstocks (UCCmJVw9xQfYuuAAwZGedKRg) — direct opinions (35 downloaded recently)
-- Jeremy Lefebvre Makes Money (@jeremylefebvremakesmoney7934) — reaction channel (~853, pending;
-  needs speaker diarization later so only Jeremy's lines get indexed)
+- Jeremy Lefebvre Makes Money (@jeremylefebvremakesmoney7934) — reaction channel (~868 videos).
+  🔄 IN PROGRESS as of Aug 6: bulk download running via Decodo proxy (see session log). Tagged
+  `video_type='reaction'`, `speaker_verified=False` — NOT filtered out of search, but flagged
+  to the AI so it caveats these as possibly not Jeremy's own opinion (see Feature 3B below).
+  Full speaker diarization (WhisperX) still a FUTURE feature, not started — this flagging
+  approach is the interim solution.
+
+### Second creator: Eric Cuka — "Mr. FIRED Up Wealth" (NEW Aug 6)
+- YouTube: **@FiredUpWealth** (confirmed via web search against his Patreon/Substack links).
+  Note: a similarly-named `@Firedupwealth_official` also exists — looks like a possible
+  reupload/fan account, NOT confirmed as his main channel. Using `@FiredUpWealth` only.
+- Single channel, all direct opinions (no separate reaction channel for him currently).
+- Added to `check_new_videos.py` as `"name": "Eric Cuka"`, `video_type: "direct"`.
+- Not yet in Neon — first run of updated `check_new_videos.py` will pull his newest 5 as a test.
+- His backlog (full channel history) NOT yet bulk-downloaded — would need a one-time
+  `download_transcrips.py` run later, same pattern as the reaction channel backfill.
+- **Reason for adding him:** enable future comparison questions like "what do Jeremy and Eric
+  think about AMD, and how do their price targets differ." Schema already supports this — the
+  `channel` column just needs both names present. See Feature 4 (NEW) below for the querying
+  side of this.
 
 ---
 
@@ -168,9 +218,68 @@ staying current on new uploads.
 
 ---
 
+## FEATURE 3B: HOME-IP MANUAL CHECK  ✅ BUILT Aug 6 (replaces need for paid proxy on small checks)
+Built because: cost review showed the $4/GB Decodo plan was mostly unused (0.24GB of 3GB with
+9 days left on the cycle) relative to actual daily need (0-2 new videos/day post-backlog).
+Decision: cancel Decodo once current bulk backfill (see session log) is done, rely on this
+script for ongoing new-video checks instead of the GitHub Actions daily automation.
+
+- **File:** `check_new_videos.py` (repo root, same folder as other scripts).
+- **What it does:** checks newest 5 videos per channel (free flat-listing call, no proxy) →
+  compares against Neon → downloads transcript + real upload_date for any missing ones, straight
+  from home IP (no Decodo) → chunks/embeds/inserts directly into Neon. No local JSON kept.
+- **Rate-limit safety:** only ever downloads what's actually new (usually 0-2/day once caught
+  up), well under the 10-15 video safe-burst threshold noted in Key Technical Notes. Keeps the
+  same 15-30s delay between transcript pulls as the proxied scripts, as an extra safety margin
+  without proxy protection.
+- **Run manually, on demand** (not scheduled) — just `python check_new_videos.py` whenever.
+- **⚠️ IMPORTANT — once Decodo is cancelled, `auto_update.yml` (GitHub Actions) will start
+  failing daily** since it depends on Decodo credentials to get through YouTube's data-center-IP
+  blocking. Need to either disable/delete that workflow or update it, or just accept the daily
+  failure emails as a reminder that `check_new_videos.py` is now the manual replacement.
+  **NOT YET DONE — still on the todo list.**
+- Channels currently configured: Financial Education, 1000xstocks, Jeremy Lefebvre Makes Money
+  (reaction), Eric Cuka (added Aug 6, not yet tested with real data).
+
+## FEATURE 3C: SPEAKER-VERIFIED FLAGGING IN APP  ✅ BUILT Aug 6
+Interim solution for reaction-channel content ambiguity, ahead of full diarization (which
+remains a separate future feature — see below). Decision: PULL from reaction-channel content
+in answers, but clearly flag it rather than exclude it or present it as Jeremy's confirmed view.
+
+- **File changed:** `app.py`, function `ask_jeremy()`.
+- Each context chunk sent to Groq is now tagged inline as either `Jeremy speaking, verified` or
+  `UNVERIFIED SPEAKER - reaction video, may not be Jeremy` (pulled from the existing
+  `speaker_verified` column — no schema change needed, the flag was already being stored, just
+  wasn't being used downstream until now).
+- System prompt updated to instruct Groq: OK to use unverified excerpts, but must flag them
+  (e.g. "⚠️ from a reaction video, may not be Jeremy's own view") and never present them as
+  Jeremy's confirmed opinion.
+- **Status:** code written and pushed to GitHub via VS Code (commit + sync), should have
+  auto-deployed to Streamlit Cloud. **NOT YET VERIFIED LIVE** — next session should confirm the
+  ⚠️ flag actually shows up correctly on a real reaction-channel question (Groq can be
+  inconsistent about following formatting instructions, may need a follow-up prompt tweak).
+
+## FEATURE 4: MULTI-CREATOR COMPARISON MODE  💡 PLANNED Aug 6 (not started)
+Enables questions like "what do Jeremy and Eric think about AMD, and how do their price targets
+differ" once Eric's data is in Neon. Schema already supports this (the `channel` column is all
+that's needed — no new table).
+- Effectively a **Mode 6** on top of Feature 1's planned router (detect "compare creators"
+  intent — 2+ creator names mentioned, or words like "differently"/"agree"/"disagree").
+- Router would run separate searches filtered by channel for the same topic (e.g. AMD chunks
+  where channel=Jeremy, then again where channel=Eric), then feed both sets to Groq with an
+  explicit instruction to contrast them.
+- **Blocked on:** Eric's data actually being in Neon in meaningful volume (currently 0 videos —
+  first test run pending). Not worth building the comparison logic until there's real data to
+  test against.
+
 ## 💡 FUTURE FEATURES (from roadmap)
 - WhisperX speaker diarization for reaction channel (index only Jeremy's lines; optionally store
-  guest opinions separately so users can ask "what did guests say about Tesla")
+  guest opinions separately so users can ask "what did guests say about Tesla"). Discussed Aug 6:
+  confirmed moderate difficulty — needs actual audio (not just captions), WhisperX handles
+  transcription+diarization+timestamps together, but speaker LABELING at scale (which
+  "Speaker 0/1" is actually Jeremy across ~868 videos) still needs manual spot-checking or a
+  voice-fingerprinting step. Interim solution (Feature 3C, built Aug 6) flags unverified
+  reaction-channel content instead of waiting on this.
 - Conflict detection (flag when Jeremy changed his mind on a stock)
 - Credibility tracker (did his predictions come true?)
 - Multi-creator support + consensus tracker ("which stocks do Jeremy AND Graham Stephan both
@@ -204,16 +313,22 @@ staying current on new uploads.
 ---
 
 ## STATUS / WHERE WE LEFT OFF
+- See 🚦 START HERE section at the very top of this file for the concrete next-session steps.
 - Merged roadmap.md + chat planning into this single file.
 - Confirmed data flow across all 3 code files.
-- Confirmed chunks have upload_date FIELD but must VERIFY it's actually populated in Neon.
+- Confirmed chunks have upload_date FIELD but must VERIFY it's actually populated in Neon
+  (STILL UNVERIFIED as of Aug 6 — deprioritized this session, still the real Feature 1 blocker).
 - Locked decisions: over-time buckets = BY YEAR; "what to buy" = meaning search + recency
   (no keyword lists).
-- ✅ Feature 3 (automated daily new-video check) built, tested, and LIVE as of Jul 23 — see
-  Feature 3 section above for full details. This was NOT on the critical path for Feature 1,
-  so the verification step below is still the next real blocker.
-- **NEXT ACTION:** Step 0 — verify upload_date is populated in the Neon DB (quick query),
-  THEN build router skeleton + Mode 3 (over-time, year-bucketing) in `app.py`.
+- ✅ Feature 3 (automated daily new-video check via GitHub Actions/Decodo) built Jul 23 — but
+  slated for retirement once Decodo is cancelled (see Feature 3B).
+- ✅ Feature 3B (home-IP manual check script) built Aug 6 — replaces Feature 3 going forward.
+- ✅ Feature 3C (speaker-verified flagging in app) built Aug 6 — pushed, not yet verified live.
+- 🔄 Reaction channel bulk backfill (~868 videos) IN PROGRESS as of Aug 6, running overnight via
+  Decodo. Download-only so far — embedding into Neon is a separate next step.
+- 💡 Eric Cuka added as second creator (config only, zero data yet) — Feature 4 (comparison
+  mode) planned but not started, blocked on his data being in Neon.
+- **NEXT ACTION:** see 🚦 START HERE at top of file.
 
 ## SESSION LOG (from roadmap + recent)
 - Jun 26: tools installed, accounts created.
@@ -238,3 +353,25 @@ staying current on new uploads.
   chunks) across all 3 channels with zero manual intervention. Confirmed this uses Decodo
   bandwidth (~10–15MB for the catch-up run) but should be minimal going forward on a daily
   cadence. Feature 1 (search modes) remains the next real priority — untouched today.
+- **Aug 6 (this session):** Noticed Decodo usage was tiny (0.24GB/3GB, 9 days left on cycle) —
+  decided to cancel the paid plan for cost reasons. Built `check_new_videos.py` as a free,
+  home-IP replacement for the daily automated check (Feature 3B) — checks newest 5/channel,
+  downloads+embeds only what's missing, well under home-IP rate-limit risk. Confirmed cancelling
+  Decodo will break the existing GitHub Actions daily automation (Feature 3) since it depends on
+  the proxy credentials — that workflow still needs to be disabled/updated (not done yet).
+  Test-ran `check_new_videos.py` successfully: found and added 1 new reaction-channel video with
+  correct upload_date. Built Feature 3C: `app.py` now tags reaction-channel chunks as
+  unverified-speaker in the context sent to Groq, and the system prompt requires those to be
+  flagged (⚠️) rather than presented as Jeremy's confirmed opinion — pushed via VS Code Source
+  Control (commit + sync) to GitHub, should have auto-deployed to Streamlit Cloud, not yet
+  verified live. Discussed diarization difficulty for reaction channel (moderate — needs audio,
+  not just captions; WhisperX recommended; speaker-labeling-at-scale is the hard part) — decided
+  to stick with the flagging approach for now rather than build diarization yet. Decided to use
+  remaining Decodo budget on a full reaction-channel bulk backfill (~868 videos) via
+  `download_transcrips.py` before cancelling — kicked off, running overnight, download-only
+  (embedding step still needed after). Identified and researched second creator, Eric Cuka
+  ("Mr. FIRED Up Wealth", @FiredUpWealth) — added his channel to `check_new_videos.py` (untested,
+  zero data so far). Planned Feature 4 (multi-creator comparison mode / "Mode 6") conceptually —
+  not built, blocked on Eric's data existing in Neon first. Original upload_date verification
+  for the 25,127 Financial Education chunks (flagged as the real Feature 1 blocker since Jul 12)
+  is STILL not done — deprioritized again this session in favor of the above.

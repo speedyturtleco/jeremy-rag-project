@@ -49,6 +49,11 @@ CHANNELS = [
         "url": "https://www.youtube.com/@jeremylefebvremakesmoney7934/videos",
         "video_type": "reaction",
     },
+    {
+        "name": "Eric Cuka",
+        "url": "https://www.youtube.com/@FiredUpWealth/videos",
+        "video_type": "direct",
+    },
 ]
 
 DECODO_PROXY_URL = f"http://{os.getenv('DECODO_USERNAME')}:{os.getenv('DECODO_PASSWORD')}@gate.decodo.com:10000"

@@ -1,4 +1,5 @@
 import os
+import re
 import streamlit as st
 from sentence_transformers import SentenceTransformer
 import psycopg2
@@ -10,6 +11,83 @@ load_dotenv()
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 JEREMY_CHANNELS = ['Financial Education', 'Jeremy Lefebvre Makes Money']
+
+# ============ Feature 1, Mode 1: recency questions ("what's the latest video from X") ============
+# Maps how a user might refer to a creator to the actual `channel` value(s) in Neon.
+# 'jeremy' is ambiguous (his main channel + the reaction channel where he's still the owner),
+# so it maps to both - the query below just returns whichever is actually newest.
+CHANNEL_ALIASES = {
+    'jeremy': ['Financial Education', 'Jeremy Lefebvre Makes Money'],
+    'jeremy lefebvre': ['Financial Education', 'Jeremy Lefebvre Makes Money'],
+    'financial education': ['Financial Education'],
+    '1000xstocks': ['1000xstocks'],
+    'eric': ['Eric Cuka'],
+    'eric cuka': ['Eric Cuka'],
+}
+
+RECENCY_PATTERN = re.compile(
+    r'\b(latest|newest|most recent|last)\b.{0,15}\bvideo\b|\bvideo\b.{0,15}\b(latest|newest|most recent)\b',
+    re.IGNORECASE
+)
+
+
+def detect_recency_question(question):
+    """True if the question is literally asking for the newest/latest video, e.g.
+    'what is the latest video from Eric'. Deliberately narrow - only catches the
+    specific bug we found (semantic search has no concept of recency), not general
+    'what's Jeremy's current opinion' style questions."""
+    return bool(RECENCY_PATTERN.search(question))
+
+
+def extract_channels_from_question(question):
+    """Returns a list of Neon `channel` values mentioned in the question, or None if no
+    creator was named (meaning: search across all channels)."""
+    q = question.lower()
+    matched = []
+    for alias, channels in CHANNEL_ALIASES.items():
+        if alias in q:
+            for c in channels:
+                if c not in matched:
+                    matched.append(c)
+    return matched or None
+
+
+def get_latest_videos(channels=None, limit=3):
+    """Direct ORDER BY upload_date DESC query - bypasses semantic search entirely.
+    Returns one representative chunk per video (for context), most recent videos first."""
+    conn = psycopg2.connect(os.getenv("NEON_DATABASE_URL"))
+    cursor = conn.cursor()
+    base_query = """
+        SELECT * FROM (
+            SELECT DISTINCT ON (regexp_replace(video_id, '_[0-9]+$', ''))
+                title, channel, video_type, upload_date, url, speaker_verified, chunk_text
+            FROM transcripts
+            WHERE upload_date IS NOT NULL AND upload_date != ''
+            {channel_filter}
+            ORDER BY regexp_replace(video_id, '_[0-9]+$', ''), upload_date DESC
+        ) sub
+        ORDER BY upload_date DESC
+        LIMIT %s
+    """
+    params = []
+    if channels:
+        channel_filter = "AND channel = ANY(%s)"
+        params.append(channels)
+    else:
+        channel_filter = ""
+    params.append(limit)
+    cursor.execute(base_query.format(channel_filter=channel_filter), params)
+    results = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return [
+        {
+            'title': r[0], 'channel': r[1], 'video_type': r[2], 'upload_date': r[3],
+            'url': r[4], 'speaker_verified': r[5], 'chunk_text': r[6], 'similarity': 1.0
+        }
+        for r in results
+    ]
+# ===================================================================================================
 
 @st.cache_resource
 def load_model():
@@ -49,7 +127,7 @@ def ask_jeremy(question, context_chunks):
         for c in context_chunks
     ])
     response = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         messages=[
             {
                 "role": "system",
@@ -111,7 +189,11 @@ if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
     with st.chat_message('user'):
         st.markdown(prompt)
     with st.chat_message('assistant'):
-        chunks = search_transcripts(prompt)
+        if detect_recency_question(prompt):
+            target_channels = extract_channels_from_question(prompt)
+            chunks = get_latest_videos(channels=target_channels, limit=3)
+        else:
+            chunks = search_transcripts(prompt)
         top_channel = chunks[0].get('channel', '') if chunks else ''
         is_jeremy = top_channel in JEREMY_CHANNELS
         spinner_text = 'Flipping your flapjacks... 🥞' if is_jeremy else 'Digging through the transcripts... 🔍'

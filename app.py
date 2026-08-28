@@ -39,6 +39,32 @@ def detect_recency_question(question):
     return bool(RECENCY_PATTERN.search(question))
 
 
+VIDEO_URL_PATTERN = re.compile(r'youtube\.com/watch\?v=([A-Za-z0-9_-]{6,})')
+
+SUMMARY_FOLLOWUP_PATTERN = re.compile(
+    r'\b(summar\w*|breakdown|break\s?down|explain|tell me more about)\b.{0,20}\bvideo\b',
+    re.IGNORECASE
+)
+
+
+def detect_video_summary_question(question):
+    """True for follow-ups like 'summarize the video' / 'break down that video' that refer
+    back to a specific video already mentioned in the conversation, rather than a new topic
+    search."""
+    return bool(SUMMARY_FOLLOWUP_PATTERN.search(question))
+
+
+def find_last_mentioned_video_id(history):
+    """Scans backward through the conversation for the most recent YouTube URL the app itself
+    cited in an answer, and returns just the video ID part of it."""
+    for msg in reversed(history):
+        if msg['role'] == 'assistant':
+            match = VIDEO_URL_PATTERN.search(msg['content'])
+            if match:
+                return match.group(1)
+    return None
+
+
 def extract_channels_from_question(question):
     """Returns a list of Neon `channel` values mentioned in the question, or None if no
     creator was named (meaning: search across all channels)."""
@@ -77,6 +103,27 @@ def get_latest_videos(channels=None, limit=3):
         channel_filter = ""
     params.append(limit)
     cursor.execute(base_query.format(channel_filter=channel_filter), params)
+    results = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return [
+        {
+            'title': r[0], 'channel': r[1], 'video_type': r[2], 'upload_date': r[3],
+            'url': r[4], 'speaker_verified': r[5], 'chunk_text': r[6], 'similarity': 1.0
+        }
+        for r in results
+    ]
+def get_video_chunks(video_id, limit=20):
+    """Pulls ALL chunks for one specific video by its YouTube ID, in order - used when the
+    user is asking about a specific video already identified in the conversation, rather than
+    doing a fresh semantic search."""
+    conn = psycopg2.connect(os.getenv("NEON_DATABASE_URL"))
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT title, channel, video_type, upload_date, url, speaker_verified, chunk_text "
+        "FROM transcripts WHERE video_id LIKE %s ORDER BY video_id LIMIT %s",
+        (f"{video_id}_%", limit)
+    )
     results = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -208,6 +255,8 @@ if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
         if detect_recency_question(prompt):
             target_channels = extract_channels_from_question(prompt)
             chunks = get_latest_videos(channels=target_channels, limit=3)
+        elif detect_video_summary_question(prompt) and find_last_mentioned_video_id(conversation_history):
+            chunks = get_video_chunks(find_last_mentioned_video_id(conversation_history))
         else:
             search_query = build_search_query(prompt, conversation_history)
             chunks = search_transcripts(search_query)

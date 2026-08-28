@@ -118,7 +118,22 @@ def search_transcripts(query, limit=10):
         }
         for r in results
     ]
-
+def build_search_query(prompt, history, max_context_chars=800):
+    if not history:
+        return prompt
+    last_assistant = None
+    last_user = None
+    for msg in reversed(history):
+        if msg['role'] == 'assistant' and last_assistant is None:
+            last_assistant = msg['content']
+        elif msg['role'] == 'user' and last_assistant is not None and last_user is None:
+            last_user = msg['content']
+        if last_assistant is not None and last_user is not None:
+            break
+    if not last_assistant:
+        return prompt
+    context = f"{last_user or ''} {last_assistant}"[:max_context_chars]
+    return f"{prompt}\n\nContext from the previous question and answer: {context}"
 def ask_jeremy(question, context_chunks):
     context = '\n\n'.join([
         f"[{c['channel']} | {c['upload_date'] or 'Unknown date'} | {c['url']} | "
@@ -185,6 +200,7 @@ for message in st.session_state.messages:
 
 
 if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
+    conversation_history = st.session_state.messages.copy()
     st.session_state.messages.append({'role': 'user', 'content': prompt})
     with st.chat_message('user'):
         st.markdown(prompt)
@@ -193,7 +209,8 @@ if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
             target_channels = extract_channels_from_question(prompt)
             chunks = get_latest_videos(channels=target_channels, limit=3)
         else:
-            chunks = search_transcripts(prompt)
+            search_query = build_search_query(prompt, conversation_history)
+            chunks = search_transcripts(search_query)
         top_channel = chunks[0].get('channel', '') if chunks else ''
         is_jeremy = top_channel in JEREMY_CHANNELS
         spinner_text = 'Flipping your flapjacks... 🥞' if is_jeremy else 'Digging through the transcripts... 🔍'

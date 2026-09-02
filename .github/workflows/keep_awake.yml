@@ -1,0 +1,28 @@
+name: Keep Ask Jeremy app awake
+
+on:
+  schedule:
+    # Every ~10 hours (well under Streamlit Community Cloud's 12-hour sleep threshold).
+    - cron: '0 */10 * * *'
+  workflow_dispatch: {}   # adds a manual "Run workflow" button on the Actions tab
+
+jobs:
+  ping-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Playwright
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Visit app and wake it if asleep
+        run: python keep_app_awake.py

@@ -473,7 +473,7 @@ def ask_jeremy(question, context_chunks):
                 "content": f"Here are relevant transcript excerpts:\n\n{context}\n\nBased on these transcripts, please answer this question: {question}"
             }
         ],
-        max_tokens=1000
+        max_tokens=1800
     )
     return response.choices[0].message.content
 

@@ -473,7 +473,7 @@ def ask_jeremy(question, context_chunks):
                 "content": f"Here are relevant transcript excerpts:\n\n{context}\n\nBased on these transcripts, please answer this question: {question}"
             }
         ],
-        max_tokens=1800
+        max_tokens=2500
     )
     return response.choices[0].message.content
 
@@ -534,7 +534,7 @@ if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
         elif detect_comparison_question(prompt):
             search_query = build_search_query(prompt, conversation_history)
             chunks = search_transcripts_comparison(search_query)
-            prompt_for_groq = prompt + " (Please contrast Jeremy's and Eric's views separately, noting where they agree or disagree.)"
+            prompt_for_groq = prompt + " (Please contrast Jeremy's and Eric's views separately, noting where they agree or disagree. Keep it concise - a short summary for each, not an exhaustive table - so the full answer fits comfortably.)"
         elif detect_first_mention_question(prompt):
             target_channels = extract_channels_from_question(prompt)
             search_query = build_search_query(prompt, conversation_history)

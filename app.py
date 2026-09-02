@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import streamlit as st
 from sentence_transformers import SentenceTransformer
 import psycopg2
@@ -136,6 +137,184 @@ def get_video_chunks(video_id, limit=20):
     ]
 # ===================================================================================================
 
+# ============ Feature 1, Mode 2: specific time period ("back in 2021", "in early 2020") ============
+YEAR_PATTERN = re.compile(r'\b(20[0-2][0-9])\b')
+HALF_PATTERN = re.compile(r'\b(early|late)\b', re.IGNORECASE)
+
+
+def detect_time_period_question(question):
+    """True if the question names a specific year, e.g. 'what did Jeremy say about
+    Tesla back in 2021'. A bare year is enough to trigger this - deliberately simple."""
+    return bool(YEAR_PATTERN.search(question))
+
+
+def extract_time_period(question):
+    """Pulls the year (as a string, e.g. '2021') and, if present, whether the question
+    narrows to 'early' or 'late' that year (used to filter to the first/second half)."""
+    year_match = YEAR_PATTERN.search(question)
+    if not year_match:
+        return None, None
+    year = year_match.group(1)
+    half_match = HALF_PATTERN.search(question)
+    half = half_match.group(1).lower() if half_match else None
+    return year, half
+
+
+def search_transcripts_by_period(query, year, half=None, channels=None, limit=10):
+    """Same semantic search as search_transcripts(), but filtered to chunks whose
+    upload_date falls within the given year (upload_date is stored as 'YYYYMMDD' text),
+    optionally narrowed to the first or second half of that year."""
+    embedding = model.encode(query).tolist()
+    conn = psycopg2.connect(os.getenv("NEON_DATABASE_URL"))
+    cursor = conn.cursor()
+    sql = (
+        "SELECT title, channel, video_type, upload_date, url, speaker_verified, chunk_text, "
+        "1 - (embedding <=> %s::vector) AS similarity FROM transcripts "
+        "WHERE 1 - (embedding <=> %s::vector) > 0.25 AND upload_date LIKE %s"
+    )
+    params = [embedding, embedding, f"{year}%"]
+    if half == 'early':
+        sql += " AND substring(upload_date, 5, 2) BETWEEN '01' AND '06'"
+    elif half == 'late':
+        sql += " AND substring(upload_date, 5, 2) BETWEEN '07' AND '12'"
+    if channels:
+        sql += " AND channel = ANY(%s)"
+        params.append(channels)
+    sql += " ORDER BY similarity DESC LIMIT %s"
+    params.append(limit)
+    cursor.execute(sql, params)
+    results = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return [
+        {
+            'title': r[0], 'channel': r[1], 'video_type': r[2], 'upload_date': r[3],
+            'url': r[4], 'speaker_verified': r[5], 'chunk_text': r[6], 'similarity': r[7]
+        }
+        for r in results
+    ]
+# ===================================================================================================
+
+# ============ Feature 1, Modes 3 & 4: timeline / evolution + first mention ============
+# Both share the same retrieval (spread relevant chunks across every year that has one),
+# they only differ in how the question is framed to Groq afterward.
+FIRST_MENTION_PATTERN = re.compile(
+    r'\bwhen did\b.{0,40}\b(start|begin)\b|\bfirst\s+(time|mention(ed)?)\b|\bhas\b.{0,20}\balways\b',
+    re.IGNORECASE
+)
+
+TIMELINE_PATTERN = re.compile(
+    r'\bover time\b|\bchanged\b.{0,20}\b(mind|opinion|view|stance)s?\b|\bevolution\b|\bevolved\b|'
+    r'\bhistory of\b|\balways\b',
+    re.IGNORECASE
+)
+
+
+def detect_first_mention_question(question):
+    """True for 'when did Jeremy start liking X', 'has he always thought Y', 'first time
+    he mentioned Z' - questions that want the ORIGIN of an opinion, not just how it changed."""
+    return bool(FIRST_MENTION_PATTERN.search(question))
+
+
+def detect_timeline_question(question):
+    """True for general 'has his opinion changed over time' style questions."""
+    return bool(TIMELINE_PATTERN.search(question))
+
+
+def search_transcripts_timeline(query, channels=None, similarity_floor=0.2, total_limit=10):
+    """Spreads results across ALL years instead of just returning the single best-matching
+    chunks (which tend to cluster in whichever year talked about a topic the most). Uses a
+    window function to keep only the single best-matching chunk per year, then returns those
+    ordered chronologically - giving a year-by-year arc instead of a pile of similar chunks
+    from the same time period."""
+    embedding = model.encode(query).tolist()
+    conn = psycopg2.connect(os.getenv("NEON_DATABASE_URL"))
+    cursor = conn.cursor()
+    channel_filter = "AND channel = ANY(%s)" if channels else ""
+    sql = f"""
+        SELECT title, channel, video_type, upload_date, url, speaker_verified, chunk_text, sim
+        FROM (
+            SELECT title, channel, video_type, upload_date, url, speaker_verified, chunk_text,
+                   1 - (embedding <=> %s::vector) AS sim,
+                   substring(upload_date, 1, 4) AS yr,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY substring(upload_date, 1, 4)
+                       ORDER BY 1 - (embedding <=> %s::vector) DESC
+                   ) AS rn
+            FROM transcripts
+            WHERE upload_date IS NOT NULL AND upload_date != ''
+            {channel_filter}
+        ) sub
+        WHERE rn = 1 AND sim > %s
+        ORDER BY yr ASC
+        LIMIT %s
+    """
+    params = [embedding, embedding]
+    if channels:
+        params.append(channels)
+    params.extend([similarity_floor, total_limit])
+    cursor.execute(sql, params)
+    results = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return [
+        {
+            'title': r[0], 'channel': r[1], 'video_type': r[2], 'upload_date': r[3],
+            'url': r[4], 'speaker_verified': r[5], 'chunk_text': r[6], 'similarity': r[7]
+        }
+        for r in results
+    ]
+# ===================================================================================================
+
+# ============ Feature 4: multi-creator comparison mode ============
+COMPARISON_JEREMY_ALIASES = ['jeremy', 'financial education', 'jeremy lefebvre']
+COMPARISON_ERIC_ALIASES = ['eric', 'eric cuka']
+
+
+def detect_comparison_question(question):
+    """True only when BOTH creators are named in the same question (e.g. 'what do Jeremy
+    and Eric think about AMD') - deliberately conservative so a question that just happens
+    to mention one creator doesn't get treated as a comparison."""
+    q = question.lower()
+    mentions_jeremy = any(alias in q for alias in COMPARISON_JEREMY_ALIASES)
+    mentions_eric = any(alias in q for alias in COMPARISON_ERIC_ALIASES)
+    return mentions_jeremy and mentions_eric
+
+
+def search_transcripts_by_channels(query, channels, limit=6):
+    """Same semantic search as search_transcripts(), restricted to a specific set of
+    channels - used to guarantee each creator actually gets represented in a comparison,
+    instead of leaving it to chance in one combined top-10 search."""
+    embedding = model.encode(query).tolist()
+    conn = psycopg2.connect(os.getenv("NEON_DATABASE_URL"))
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT title, channel, video_type, upload_date, url, speaker_verified, chunk_text, "
+        "1 - (embedding <=> %s::vector) AS similarity FROM transcripts "
+        "WHERE 1 - (embedding <=> %s::vector) > 0.25 AND channel = ANY(%s) "
+        "ORDER BY similarity DESC LIMIT %s",
+        (embedding, embedding, channels, limit)
+    )
+    results = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return [
+        {
+            'title': r[0], 'channel': r[1], 'video_type': r[2], 'upload_date': r[3],
+            'url': r[4], 'speaker_verified': r[5], 'chunk_text': r[6], 'similarity': r[7]
+        }
+        for r in results
+    ]
+
+
+def search_transcripts_comparison(query, limit_per_creator=5):
+    """Runs separate searches for Jeremy's channels and Eric's channel for the same topic,
+    then combines them - so both creators are guaranteed real representation."""
+    jeremy_chunks = search_transcripts_by_channels(query, JEREMY_CHANNELS, limit_per_creator)
+    eric_chunks = search_transcripts_by_channels(query, ['Eric Cuka'], limit_per_creator)
+    return jeremy_chunks + eric_chunks
+# ===================================================================================================
+
 @st.cache_resource
 def load_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
@@ -181,9 +360,103 @@ def build_search_query(prompt, history, max_context_chars=800):
         return prompt
     context = f"{last_user or ''} {last_assistant}"[:max_context_chars]
     return f"{prompt}\n\nContext from the previous question and answer: {context}"
+
+
+# ============ Feature 2: timestamp / jump-to-moment ============
+# Fetch-on-demand + cache, per PROJECT_PLAN.md's plan: only videos that actually get cited
+# in an answer ever get their timed transcript fetched, and it's cached in Neon afterward so
+# a given video only gets fetched once, ever.
+def _ensure_timestamp_cache_table(cursor):
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS video_timestamps ("
+        "video_id TEXT PRIMARY KEY, segments JSONB, fetched_at TIMESTAMP DEFAULT now())"
+    )
+
+
+def get_timed_segments(video_id):
+    """Returns cached timed-transcript segments (list of {'text', 'start'}) for a video,
+    fetching from YouTube and caching in Neon on first use. Returns None if the transcript
+    isn't available or the fetch fails - callers should treat that as 'no timestamp available'
+    rather than an error."""
+    conn = psycopg2.connect(os.getenv("NEON_DATABASE_URL"))
+    cursor = conn.cursor()
+    _ensure_timestamp_cache_table(cursor)
+    conn.commit()
+    cursor.execute("SELECT segments FROM video_timestamps WHERE video_id = %s", (video_id,))
+    row = cursor.fetchone()
+    if row:
+        cursor.close()
+        conn.close()
+        return row[0]
+    segments = None
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+        ytt = YouTubeTranscriptApi()
+        fetched = ytt.fetch(video_id)
+        segments = [{'text': snippet.text, 'start': snippet.start} for snippet in fetched]
+        cursor.execute(
+            "INSERT INTO video_timestamps (video_id, segments) VALUES (%s, %s) "
+            "ON CONFLICT (video_id) DO UPDATE SET segments = EXCLUDED.segments",
+            (video_id, json.dumps(segments))
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"Timestamp fetch failed for {video_id}: {e}")
+        segments = None
+    cursor.close()
+    conn.close()
+    return segments
+
+
+def find_timestamp_for_chunk(chunk_text, segments):
+    """Best-effort: reconstructs the same flat caption text embed_and_upload.py chunked from
+    (' '.join of each caption line), finds roughly where this chunk's text starts in that
+    string, then walks the segments to find which caption's start time that offset falls in.
+    Returns None (rather than guessing) if it can't find a confident match."""
+    if not segments:
+        return None
+    full_text = ' '.join(seg['text'] for seg in segments)
+    snippet = chunk_text.strip()[:200]
+    idx = full_text.find(snippet)
+    if idx == -1:
+        snippet = chunk_text.strip()[:60]
+        idx = full_text.find(snippet)
+    if idx == -1:
+        return None
+    running = 0
+    for seg in segments:
+        seg_len = len(seg['text']) + 1  # +1 for the space the join above adds
+        if running + seg_len > idx:
+            return max(0, int(seg['start']) - 2)  # small buffer so it doesn't start mid-sentence
+        running += seg_len
+    return None
+
+
+def add_timestamp_links(chunks):
+    """For each chunk, tries to attach a '&t=Ns' timestamp to its video URL pointing at
+    roughly where the cited excerpt starts. Best-effort and silent on failure - falls back
+    to the plain video URL if anything goes wrong or no confident match is found, so this
+    never breaks an answer, it just occasionally can't add the extra precision."""
+    for c in chunks:
+        c['timestamp_url'] = c['url']
+        match = VIDEO_URL_PATTERN.search(c.get('url') or '')
+        if not match:
+            continue
+        video_id = match.group(1)
+        try:
+            segments = get_timed_segments(video_id)
+            start = find_timestamp_for_chunk(c['chunk_text'], segments)
+            if start is not None:
+                c['timestamp_url'] = f"{c['url']}&t={start}s"
+        except Exception as e:
+            print(f"Timestamp lookup failed for {video_id}: {e}")
+    return chunks
+# ===================================================================================================
+
+
 def ask_jeremy(question, context_chunks):
     context = '\n\n'.join([
-        f"[{c['channel']} | {c['upload_date'] or 'Unknown date'} | {c['url']} | "
+        f"[{c['channel']} | {c['upload_date'] or 'Unknown date'} | {c.get('timestamp_url') or c['url']} | "
         f"{c['channel'] + ' speaking, verified' if c['speaker_verified'] else 'UNVERIFIED SPEAKER - reaction video, may not be the channel owner'}]\n"
         f"{c['chunk_text']}"
         for c in context_chunks
@@ -193,7 +466,7 @@ def ask_jeremy(question, context_chunks):
         messages=[
             {
                 "role": "system",
-                "content": "You are an AI assistant that answers questions based on YouTube transcripts from multiple finance content creators, including Jeremy Lefebvre and Eric Cuka. Always mention which creator and video the information came from, when it was said, and include the video URL as a clickable link so the user can watch the source. If the transcripts include more than one creator's view on the same topic, present each person's view separately and note where they agree or disagree, rather than blending them into one answer. If opinions have changed over time for a given creator, note that. If the transcripts don't contain enough information, say so clearly. Keep answers concise and well organized. SPEAKER VERIFICATION: each excerpt is tagged either '{Channel} speaking, verified' or 'UNVERIFIED SPEAKER - reaction video, may not be the channel owner'. Reaction-channel excerpts are that channel's owner reacting to or discussing someone else's content, so the opinion voiced may belong to a guest or the creator being reacted to, not the channel owner. You may still use unverified excerpts to answer, but you must clearly flag them - e.g. '⚠️ from a reaction video, may not be the channel owner's own view' - and never present an unverified excerpt as that person's confirmed opinion. IMPORTANT: If Jeremy Lefebvre used the phrase 'load the boat' about a stock in the transcripts, always highlight that with a 🚢 emoji and make it clear he was extremely bullish."
+                "content": "You are an AI assistant that answers questions based on YouTube transcripts from multiple finance content creators, including Jeremy Lefebvre and Eric Cuka. Always mention which creator and video the information came from, when it was said, and include the video URL as a clickable link so the user can watch the source (if the URL includes a '&t=Ns' timestamp, that points at roughly the right moment in the video - mention that they can jump straight to it). If the transcripts include more than one creator's view on the same topic, present each person's view separately and note where they agree or disagree, rather than blending them into one answer. If opinions have changed over time for a given creator, note that, and if transcripts span multiple years on the same topic, briefly trace how the view evolved chronologically. If the transcripts don't contain enough information, say so clearly. Keep answers concise and well organized. SPEAKER VERIFICATION: each excerpt is tagged either '{Channel} speaking, verified' or 'UNVERIFIED SPEAKER - reaction video, may not be the channel owner'. Reaction-channel excerpts are that channel's owner reacting to or discussing someone else's content, so the opinion voiced may belong to a guest or the creator being reacted to, not the channel owner. You may still use unverified excerpts to answer, but you must clearly flag them - e.g. '⚠️ from a reaction video, may not be the channel owner's own view' - and never present an unverified excerpt as that person's confirmed opinion. IMPORTANT: If Jeremy Lefebvre used the phrase 'load the boat' about a stock in the transcripts, always highlight that with a 🚢 emoji and make it clear he was extremely bullish."
             },
             {
                 "role": "user",
@@ -252,11 +525,30 @@ if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
     with st.chat_message('user'):
         st.markdown(prompt)
     with st.chat_message('assistant'):
+        prompt_for_groq = prompt
         if detect_recency_question(prompt):
             target_channels = extract_channels_from_question(prompt)
             chunks = get_latest_videos(channels=target_channels, limit=3)
         elif detect_video_summary_question(prompt) and find_last_mentioned_video_id(conversation_history):
             chunks = get_video_chunks(find_last_mentioned_video_id(conversation_history))
+        elif detect_comparison_question(prompt):
+            search_query = build_search_query(prompt, conversation_history)
+            chunks = search_transcripts_comparison(search_query)
+            prompt_for_groq = prompt + " (Please contrast Jeremy's and Eric's views separately, noting where they agree or disagree.)"
+        elif detect_first_mention_question(prompt):
+            target_channels = extract_channels_from_question(prompt)
+            search_query = build_search_query(prompt, conversation_history)
+            chunks = search_transcripts_timeline(search_query, channels=target_channels)
+            prompt_for_groq = prompt + " (Focus on identifying the FIRST time this was mentioned, then briefly trace how the view evolved to now.)"
+        elif detect_timeline_question(prompt):
+            target_channels = extract_channels_from_question(prompt)
+            search_query = build_search_query(prompt, conversation_history)
+            chunks = search_transcripts_timeline(search_query, channels=target_channels)
+        elif detect_time_period_question(prompt):
+            year, half = extract_time_period(prompt)
+            target_channels = extract_channels_from_question(prompt)
+            search_query = build_search_query(prompt, conversation_history)
+            chunks = search_transcripts_by_period(search_query, year, half, channels=target_channels)
         else:
             search_query = build_search_query(prompt, conversation_history)
             chunks = search_transcripts(search_query)
@@ -266,7 +558,8 @@ if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
         with st.spinner(spinner_text):
             if chunks:
                 top_score = chunks[0].get('similarity', 0)
-                answer = ask_jeremy(prompt, chunks)
+                chunks = add_timestamp_links(chunks)
+                answer = ask_jeremy(prompt_for_groq, chunks)
                 if top_score > 0.5:
                     if is_jeremy:
                         answer = "🔥 Holy smokas, this ain't no jokas!\n\n" + answer

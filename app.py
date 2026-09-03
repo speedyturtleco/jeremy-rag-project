@@ -330,24 +330,47 @@ model = load_model()
 # literal keyword safety net for "X stock" style questions, and - when the question is asking
 # for the MOST RECENT mention of a topic rather than the latest video overall - sorts results
 # by date so "latest" actually means latest instead of just "most semantically similar."
+#
+# Second bug found same day: "what's Jeremy's latest take on Celcius" (note the typo - should
+# be "Celsius") ALSO came back wrong (a low-value unverified reaction-video clip) even though
+# a verified, much more recent mention existed in the same Sept 2026 video as the Wynn bug.
+# Two separate gaps caused this:
+#   1. extract_stock_keyword() only recognized "X stock" phrasing, not "take on X" - broadened
+#      below to also catch a topic named at the end of a recency-style question.
+#   2. The user's literal typo ("Celcius") doesn't exact-match the correctly-spelled "Celsius"
+#      in the transcript, so a plain ILIKE keyword match finds nothing. Added a fuzzy fallback
+#      (Postgres pg_trgm's word_similarity) that only kicks in when the exact match comes up
+#      empty - best-effort and wrapped in try/except so a missing extension or any DB hiccup
+#      just skips the fuzzy step instead of breaking the whole search.
 STOCK_KEYWORD_PATTERN = re.compile(r'\b([A-Za-z][A-Za-z.\-]{1,15})\s+stock\b', re.IGNORECASE)
+TOPIC_TAIL_PATTERN = re.compile(r'\b(?:on|about)\s+([A-Za-z][A-Za-z.\-]{1,20})\b\s*[?.!]*\s*$', re.IGNORECASE)
 RECENCY_WORD_PATTERN = re.compile(r'\b(latest|newest|most recent|last)\b', re.IGNORECASE)
-
-
-def extract_stock_keyword(question):
-    """Pulls the word right before 'stock' in questions like 'wynn stock' or 'AMD stock'.
-    Deliberately narrow - just enough to catch the common 'is Jeremy talking about X stock'
-    phrasing, not a general entity/ticker extractor."""
-    match = STOCK_KEYWORD_PATTERN.search(question)
-    return match.group(1) if match else None
 
 
 def wants_most_recent_mention(question):
     """True for 'latest/most recent/last' language that ISN'T Mode 1's 'latest VIDEO' question
     (that one bypasses semantic search entirely via get_latest_videos) - e.g. 'latest instance
     of Jeremy talking about wynn stock'. Used to sort hybrid results by date instead of
-    similarity so recency questions about a topic actually surface the newest match."""
+    similarity so recency questions about a topic actually surface the newest match, and to
+    gate the broader (higher false-positive-risk) topic-tail keyword extraction below."""
     return bool(RECENCY_WORD_PATTERN.search(question)) and not detect_recency_question(question)
+
+
+def extract_stock_keyword(question):
+    """Pulls a likely stock/topic keyword out of the question. Always catches 'X stock'
+    phrasing (e.g. 'wynn stock', 'AMD stock'). For recency-style questions only ('latest take
+    on X', 'most recent mention of X') also falls back to whatever topic is named at the very
+    end of the question - broader and more false-positive-prone, so it's deliberately gated to
+    only the recency-question case rather than applying to every question (which could risk
+    dragging in an ILIKE-matched-but-not-actually-relevant chunk for a plain topic question)."""
+    match = STOCK_KEYWORD_PATTERN.search(question)
+    if match:
+        return match.group(1)
+    if wants_most_recent_mention(question):
+        tail_match = TOPIC_TAIL_PATTERN.search(question)
+        if tail_match:
+            return tail_match.group(1)
+    return None
 # ===================================================================================================
 
 def search_transcripts(query, limit=10):
@@ -369,9 +392,31 @@ def search_transcripts(query, limit=10):
             (embedding, f"%{keyword}%", limit)
         )
         keyword_results = cursor.fetchall()
-        # Keyword hits are guaranteed a slot, first - an exact literal match on the stock name
-        # is a stronger relevance signal than embedding similarity, and needs to survive the
-        # final truncation below even when the question doesn't use recency language.
+
+        if not keyword_results:
+            # Exact spelling found nothing - could be a user typo (like "Celcius" for
+            # "Celsius") or a phonetic auto-caption misspelling. Try a fuzzy trigram match as
+            # a last resort. Best-effort: if pg_trgm isn't available or anything goes wrong,
+            # roll back and just proceed without the fuzzy results rather than breaking search.
+            try:
+                cursor.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
+                cursor.execute(
+                    "SELECT title, channel, video_type, upload_date, url, speaker_verified, chunk_text, "
+                    "1 - (embedding <=> %s::vector) AS similarity FROM transcripts "
+                    "WHERE word_similarity(%s, chunk_text) > 0.5 "
+                    "ORDER BY upload_date DESC NULLS LAST LIMIT %s",
+                    (embedding, keyword, limit)
+                )
+                keyword_results = cursor.fetchall()
+                conn.commit()
+            except Exception as e:
+                print(f"Fuzzy keyword fallback failed: {e}")
+                conn.rollback()
+                keyword_results = []
+
+        # Keyword hits are guaranteed a slot, first - an exact (or fuzzy) match on the stock
+        # name is a stronger relevance signal than embedding similarity, and needs to survive
+        # the final truncation below even when the question doesn't use recency language.
         merged = []
         seen = set()
         for r in keyword_results:

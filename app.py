@@ -321,6 +321,35 @@ def load_model():
 
 model = load_model()
 
+# ============ Hybrid keyword fallback for the standard search (Mode 5) ============
+# Bug found Sep 3: "what's the latest instance of Jeremy talking about Wynn stock" came back
+# with "no mention found," even though a video from 2 days earlier had already been ingested
+# and DID mention Wynn - the plain top-10 semantic search across the whole ~36k-chunk corpus
+# just didn't surface that one brief mention; it scored below other chunks (or below the 0.3
+# floor) since a single passing mention of a stock doesn't stand out semantically. This adds a
+# literal keyword safety net for "X stock" style questions, and - when the question is asking
+# for the MOST RECENT mention of a topic rather than the latest video overall - sorts results
+# by date so "latest" actually means latest instead of just "most semantically similar."
+STOCK_KEYWORD_PATTERN = re.compile(r'\b([A-Za-z][A-Za-z.\-]{1,15})\s+stock\b', re.IGNORECASE)
+RECENCY_WORD_PATTERN = re.compile(r'\b(latest|newest|most recent|last)\b', re.IGNORECASE)
+
+
+def extract_stock_keyword(question):
+    """Pulls the word right before 'stock' in questions like 'wynn stock' or 'AMD stock'.
+    Deliberately narrow - just enough to catch the common 'is Jeremy talking about X stock'
+    phrasing, not a general entity/ticker extractor."""
+    match = STOCK_KEYWORD_PATTERN.search(question)
+    return match.group(1) if match else None
+
+
+def wants_most_recent_mention(question):
+    """True for 'latest/most recent/last' language that ISN'T Mode 1's 'latest VIDEO' question
+    (that one bypasses semantic search entirely via get_latest_videos) - e.g. 'latest instance
+    of Jeremy talking about wynn stock'. Used to sort hybrid results by date instead of
+    similarity so recency questions about a topic actually surface the newest match."""
+    return bool(RECENCY_WORD_PATTERN.search(question)) and not detect_recency_question(question)
+# ===================================================================================================
+
 def search_transcripts(query, limit=10):
     embedding = model.encode(query).tolist()
     conn = psycopg2.connect(os.getenv("NEON_DATABASE_URL"))
@@ -330,8 +359,37 @@ def search_transcripts(query, limit=10):
         (embedding, embedding, limit)
     )
     results = cursor.fetchall()
+
+    keyword = extract_stock_keyword(query)
+    if keyword:
+        cursor.execute(
+            "SELECT title, channel, video_type, upload_date, url, speaker_verified, chunk_text, "
+            "1 - (embedding <=> %s::vector) AS similarity FROM transcripts "
+            "WHERE chunk_text ILIKE %s ORDER BY upload_date DESC NULLS LAST LIMIT %s",
+            (embedding, f"%{keyword}%", limit)
+        )
+        keyword_results = cursor.fetchall()
+        # Keyword hits are guaranteed a slot, first - an exact literal match on the stock name
+        # is a stronger relevance signal than embedding similarity, and needs to survive the
+        # final truncation below even when the question doesn't use recency language.
+        merged = []
+        seen = set()
+        for r in keyword_results:
+            key = (r[0], r[6])
+            if key not in seen:
+                merged.append(r)
+                seen.add(key)
+        for r in results:
+            key = (r[0], r[6])
+            if key not in seen:
+                merged.append(r)
+                seen.add(key)
+        results = merged
+
     cursor.close()
-    return [
+    conn.close()
+
+    chunks = [
         {
             'title': r[0],
             'channel': r[1],
@@ -344,6 +402,9 @@ def search_transcripts(query, limit=10):
         }
         for r in results
     ]
+    if keyword and wants_most_recent_mention(query):
+        chunks.sort(key=lambda c: c['upload_date'] or '', reverse=True)
+    return chunks[:limit] if len(chunks) > limit else chunks
 def build_search_query(prompt, history, max_context_chars=800):
     if not history:
         return prompt

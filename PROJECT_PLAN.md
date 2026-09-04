@@ -1,0 +1,746 @@
+# Ask Jeremy — Master Project Plan & Memory File
+
+---
+## 🚦 START HERE — NEXT SESSION FIRST ACTION (updated Sep 4 session)
+
+**Same bug class as Sep 3, third variant: found and fixed a "for X" phrasing gap in the
+keyword-fallback fix (see FEATURE 6's second update below). Also discovered and fixed a bigger
+standing risk: the LOCAL copy of `app.py` on the user's computer had drifted out of sync with
+the live/deployed version — see the new ⚠️ LOCAL FILE SYNC note right below the "HOW TO WORK
+WITH ME" section. Everything from Sep 2 evening and Sep 3 (Feature 1 Modes 2-4, Feature 2,
+Feature 4, and the first two Feature 6 fixes) is still done and live — see below.**
+
+1. ✅ **BUG FOUND & FIXED Sep 4: "for X" / "regarding X" phrasing missed by the keyword
+   safety net** — user reported that a question about Jeremy's Netflix projections (from the
+   video "4 Stocks to Go ALL IN September 2026") came back with a false "no mention found."
+   Same root cause family as the Wynn/Celsius bugs: `TOPIC_TAIL_PATTERN` only recognized "on X"
+   / "about X" at the end of a question, not "for X" - so "his projections **for** Netflix"
+   never triggered the literal keyword search. Fixed by widening the preposition list. Full
+   details in FEATURE 6's third update below.
+2. ✅ **IMPORTANT PROCESS FIX Sep 4: local `app.py` was stale, now back in sync** — see the new
+   note below. Going forward, confirm local vs. live are in sync at the start of any session
+   that touches `app.py`, since deploys have been happening straight to GitHub without always
+   updating the local copy.
+3. **This session's deploy path was different:** for the first time, `device_commit_files`
+   successfully wrote directly to the user's local `app.py` (previous sessions logged this as
+   unavailable/refused). The user will `git add` / `git commit` / `git push` from VS Code
+   themselves to actually deploy - worth trying this path again before assuming the GitHub
+   web-editor route is required.
+
+**Sep 3 session recap (unchanged):**
+
+1. ✅ **Conversation memory re-confirmed live (Sep 3)** — asked a vague follow-up question that
+   named neither the topic nor any keyword from the prior question; the app correctly used
+   context from the previous Q&A to answer it. No code change needed, just a live smoke test.
+2. ✅ **Landing page "Try asking" examples reduced from 6 to 2 (Sep 3)** — see FEATURE 5 section
+   below for the two questions chosen and why.
+3. ✅ **BUG FOUND & FIXED Sep 3: standard search (Mode 5) could miss a stock's only mention** —
+   user asked "what's the latest instance of Jeremy talking about Wynn stock" and got a false
+   "no mention found," even though a video from 2 days earlier had already been ingested and
+   (per the user) did mention Wynn. Root cause and fix in FEATURE 6 below - this is worth
+   reading in full, since it's a real limitation of plain top-10 semantic search that could
+   recur for any other rarely-mentioned stock, not just Wynn.
+4. ✅ **SAME BUG CLASS FOUND AGAIN & FIXED Sep 3: "on X" phrasing + typo'd keywords** — right
+   after the Wynn fix, user asked "what's jeremy's latest take on celcius" (typo for Celsius)
+   and got a stale, low-confidence answer, missing a same-day verified mention. Two more gaps
+   in the Feature 6 fix, closed the same session - see FEATURE 6's update for details.
+
+**Sep 2 evening session recap (unchanged):**
+
+1. ✅ **Feature 1 Mode 2 (specific time period, e.g. "in 2021") — DONE, built and live-tested.**
+2. ✅ **Feature 1 Mode 3 (timeline/evolution, "over time") — DONE, built (shares retrieval with
+   Mode 4, live-tested via Mode 4's question which also exercises this path).**
+3. ✅ **Feature 1 Mode 4 (first mention + arc, "has he always...") — DONE, built and
+   live-tested** ("Has Jeremy always been bullish on AMD?" → correct table tracing the first
+   AMD mention through to now).
+4. ✅ **Feature 2 (timestamp / jump-to-moment links) — DONE, built and live-tested** — answers
+   now include `&t=Ns` links that jump to roughly the right moment in the cited video.
+5. ✅ **Feature 4 (multi-creator comparison mode) — DONE, built, and live-tested** — but needed
+   TWO follow-up fixes after the first deploy truncated mid-answer (see bug section below).
+   Confirmed working cleanly on the third deploy.
+6. All of the "🚦 START HERE" items from the Aug 28/Sep 2 morning session (date backfill,
+   Decodo billing, keep-awake, monitoring, conversation memory) are still closed out — see
+   below, unchanged.
+7. **What's left, for whenever:** nothing major from the original roadmap. Remaining ideas are
+   all in the 💡 FUTURE FEATURES list (conflict detection, credibility tracker, Eric-specific
+   personality, etc.) — none of it is blocking or urgent. Worth spending a session just using
+   the app normally to see if anything new surfaces now that all 4 search modes + comparison +
+   timestamps are live together.
+
+---
+
+> **How to use this file:** This is the SINGLE SOURCE OF TRUTH for this project. Chats get
+> forgotten when closed; this file does not. At the start of any new chat, paste this whole file
+> in and say "here's my project plan, catch up." Keep it at:
+> `C:\Users\speed\jeremy-rag-project\PROJECT_PLAN.md`
+>
+> Built by a first-time coder with Claude's help, starting June 2026.
+> Live at: https://ask-jeremy.streamlit.app/
+
+> **⚠️ HOW TO WORK WITH ME (added Aug 9; updated Aug 22):** I am not an expert coder. When
+> there's a new script to run, don't just hand it over and say "run this" — walk me through it
+> step by step: where the file goes, what command to type, what I should expect to see, and what
+> to do if something looks wrong. Confirm each step landed before moving to the next one.
+> This applies every session, not just when I ask for it.
+> **When a task needs multiple terminal commands run in sequence (e.g. `git add` /
+> `git commit` / `git push`), give me all of them up front but as SEPARATE commands, each
+> in its own line/code block — never chained together with `&&` or combined into one block
+> to copy-paste as a single unit. I'll run them one by one myself.**
+> **⚠️ Learned the hard way Aug 28: after ANY code change gets made and pushed, update the
+> project's saved copies of the affected file(s) AND this plan in the same session — don't
+> wait.** Keep the project docs and the live code in sync every session, not just when asked.
+
+> **⚠️ LOCAL FILE SYNC WARNING (added Sep 4):** Because Sep 2-3's deploys all went straight to
+> GitHub via the web editor (browser-driven), the LOCAL copy of `app.py` on this computer never
+> got updated with any of that work — it was still the pre-Sep-2 version until this session
+> caught and fixed it. **At the start of any session that's about to edit `app.py` (or any
+> deployed file), check whether the local copy actually matches what's live/in this project's
+> saved doc before building on top of it** — otherwise a well-intentioned local edit + `git
+> push` can silently roll back everything shipped through an alternate deploy path. This
+> session fixed it by writing the current, project-doc-verified version to the local file
+> before applying the new fix, then syncing this project's own saved copy too.
+
+---
+
+## PROJECT OVERVIEW
+A RAG app that lets users "talk to" multiple finance YouTubers' content — currently Jeremy
+Lefebvre (primary) and Eric Cuka (secondary, subtly included). Priority: keep it as FREE /
+LOW-COST as possible. This is my FIRST build.
+Long-term vision: multi-creator consensus tracker, "Speedy Turtle Co" product.
+
+## TECH STACK
+- Python, VS Code, Git
+- yt-dlp + youtube-transcript-api for downloading transcripts (via Decodo residential proxy)
+- Sentence Transformers `all-MiniLM-L6-v2` for embeddings (local, free)
+- Neon (PostgreSQL + pgvector, cloud, free tier) — handles ALL storage + vector search
+- Groq API for AI responses (free tier) — model `openai/gpt-oss-120b`, `max_tokens=2500` as of
+  Sep 2 evening session (raised from 1000 → 1800 → 2500, see FEATURE 4 bug notes below)
+- Streamlit for chat interface, deployed on Streamlit Community Cloud (free)
+- GitHub for code storage
+- Files: `download_transcrips.py` (note misspelled filename), `embed_and_upload.py`, `app.py`,
+  `auto_update.py` + `requirements-auto-update.txt` + `.github/workflows/auto_update.yml`
+  (daily automated new-video check via GitHub Actions), `check_new_videos.py` (manual,
+  no-proxy, home-IP version of the daily check), `backfill_dates.py` (one-time script that
+  backfilled missing `upload_date` values on already-downloaded videos, via Decodo — DONE),
+  `update_neon_dates.py` (one-time follow-up that pushed those backfilled dates into the Neon
+  chunk rows — CONFIRMED DONE Sep 2), `keep_app_awake.py` + `.github/workflows/keep_awake.yml`
+  (periodic ping to stop the Streamlit app from sleeping — DONE and confirmed working Sep 2)
+
+## CHANNELS
+- **Financial Education** (@FinancialEducation) — main channel, direct opinions. ✅ downloaded
+  + uploaded (2,605 videos, 25,127 chunks). ✅ Date backfill confirmed live in Neon (Sep 2) —
+  see DATA SITUATION.
+- **1000xstocks** (UCCmJVw9xQfYuuAAwZGedKRg) — direct opinions, 35 videos, ✅ 100% have dates.
+- **Jeremy Lefebvre Makes Money** (@jeremylefebvremakesmoney7934) — reaction channel.
+  ✅ Full backlog downloaded (407 transcripts in this pass) and ✅ embedded into Neon
+  (6,244 new chunks, Aug 8). 98.3% have real dates. Tagged `video_type='reaction'`,
+  `speaker_verified=False` — flagged to the AI as possibly-not-Jeremy's-own-opinion, not
+  filtered out of search.
+
+### Second creator: Eric Cuka — "Mr. FIRED Up Wealth"
+- YouTube: **@FiredUpWealth**.
+- Single channel, all direct opinions (`video_type='direct'`, `speaker_verified=True`).
+- ✅ Full backlog downloaded Aug 8 — 579/587 videos. ✅ Embedded into Neon — 5,021 new chunks.
+- ✅ Added to `check_new_videos.py` and `auto_update.py`'s daily check.
+- **App branding:** "Ask Jeremy" stays primary; Eric included subtly (subtitle, 2 example
+  questions, neutral spinner/banner text instead of Jeremy's catchphrases).
+- ✅ **Comparison questions ("what do Jeremy and Eric think about X") are now reliable** —
+  Feature 4 (multi-creator comparison mode) was built and live-tested this session (Sep 2
+  evening). See FEATURE 4 section for full details, including two bugs found and fixed during
+  rollout.
+
+---
+
+## BUG FIXED Aug 8: SPEAKER ATTRIBUTION MISLABELING
+(unchanged from before — see git history / earlier plan versions for full details.) Status:
+✅ Fixed, deployed, and verified live.
+
+---
+
+## ✅ FIXED Aug 22, CONFIRMED Aug 28: GROQ MODEL DEPRECATED (`groq.NotFoundError`)
+(unchanged — see earlier plan versions.) Status: ✅ confirmed working live. Model is
+`openai/gpt-oss-120b`. Monthly scheduled check watches for the next deprecation notice.
+
+---
+
+## ✅ FIXED & CONFIRMED Aug 28: NO CONVERSATION MEMORY BETWEEN QUESTIONS
+(unchanged — see earlier plan versions.) Status: ✅ confirmed working live, both the general
+context-stuffing fix and the specific "summarize the video" direct-lookup fix.
+
+---
+
+## DATA SITUATION (IMPORTANT — updated Sep 2)
+- 2,605 Financial Education transcripts → 25,127 chunks in Neon w/ HNSW vector index.
+- 35 from 1000xstocks.
+- 407 Jeremy Lefebvre Makes Money (reaction channel) transcripts → 6,244 chunks in Neon.
+- 579 Eric Cuka transcripts → 5,021 chunks in Neon.
+- **Total: ~3,626 videos, ~36,392+ chunks across 4 channels.**
+- Raw JSON transcripts stored as ONE FLAT BLOB of text per video for the SEARCH/embedding
+  layer — no within-blob timestamps. **As of this session, Feature 2 solves the display-side
+  timestamp problem without touching this data** (see FEATURE 2 section — it re-fetches the
+  timed transcript live, on demand, only for videos actually cited in an answer, and caches the
+  result in a new `video_timestamps` Neon table).
+- `embed_and_upload.py` chunks the blob into ~500-word pieces (50-word overlap), stores each in
+  Neon: video_id (as `{video_id}_{i}`), title, channel, video_type, upload_date, url,
+  speaker_verified, chunk_text, embedding.
+
+## ✅ RESOLVED Aug 8 → CONFIRMED Sep 2: THE CRITICAL DATE UNKNOWN
+(unchanged — see earlier plan versions.) `update_neon_dates.py` confirmed to have run
+successfully; date backfill → Neon pipeline is fully complete.
+
+---
+
+## FEATURE 1: SMART SEARCH MODES ✅ ALL 4 MODES NOW BUILT (Sep 2 evening session)
+Different question types need different search strategies. All modes live directly in `app.py`
+as independent regex-based detectors checked in sequence in the main chat handler (no unified
+router class — each mode has its own narrow detector function, checked via `elif` branches in
+priority order) — no re-download, no DB schema change needed for any of them.
+
+### ✅ Mode 1 (recency questions) — BUILT Aug 28, confirmed working for all channels
+Unchanged from before. `detect_recency_question()` + `get_latest_videos()` — direct
+`ORDER BY upload_date DESC` query, bypasses semantic search.
+
+### ✅ Mode 2 (specific time period) — BUILT and live-tested Sep 2 evening
+- `YEAR_PATTERN` (matches any `20[0-2][0-9]` in the question) + `HALF_PATTERN` (`early`/`late`)
+  + `detect_time_period_question()` + `extract_time_period()`.
+- `search_transcripts_by_period(query, year, half, channels, limit=10)` — same semantic search
+  as the standard path, but with an added `upload_date LIKE '{year}%'` filter (and an optional
+  `substring(upload_date, 5, 2) BETWEEN ...` filter for early/late-year narrowing).
+- **Live-tested:** "What did Jeremy say about Tesla back in 2021?" → correctly returned two
+  November 2021 Financial Education videos with specific valuation/profit-taking details, not
+  a random mix of Tesla mentions from any year.
+
+### ✅ Modes 3 & 4 (timeline/evolution + first mention) — BUILT and live-tested Sep 2 evening
+Both share one retrieval function, differing only in how the question gets framed to Groq:
+- `FIRST_MENTION_PATTERN` (e.g. "when did ... start", "first time ... mentioned", "has ...
+  always") → `detect_first_mention_question()`.
+- `TIMELINE_PATTERN` (e.g. "over time", "changed ... opinion", "evolution", "always") →
+  `detect_timeline_question()`.
+- `search_transcripts_timeline(query, channels, similarity_floor=0.2, total_limit=10)` — uses a
+  Postgres window function (`ROW_NUMBER() OVER (PARTITION BY substring(upload_date,1,4) ORDER
+  BY similarity DESC)`) to keep only the SINGLE best-matching chunk per year, then returns those
+  ordered chronologically. This is what makes it a year-by-year arc instead of a pile of chunks
+  clustered in whichever year talked about the topic most.
+- Mode 4 (first mention) additionally appends an instruction to the Groq prompt to focus on
+  identifying the first mention and then briefly trace the evolution to now.
+- **Live-tested (exercises both modes via one question):** "Has Jeremy always been bullish on
+  AMD?" → returned a clean table: first (and only) AMD mention was May 7 2025, Jeremy was
+  actually CRITICAL of AMD spending in that clip, and the bottom line correctly stated "Jeremy
+  has never been bullish on AMD in the material provided" — a genuinely useful, accurate answer
+  that also correctly avoided overclaiming beyond what the transcripts showed.
+
+### Router priority (checked in this order in the main chat handler):
+recency → video-summary-followup → **comparison (Feature 4)** → first-mention (Mode 4) →
+timeline (Mode 3) → time-period (Mode 2) → standard search (Mode 5, fallback).
+
+**BUILD SEQUENCE: fully complete.** All modes from the original plan are now built:
+Mode 1 ✅ (Aug 28), Mode 2 ✅, Mode 3 ✅, Mode 4 ✅ (all Sep 2 evening). Mode 5 (standard search)
+was always the pre-existing fallback.
+
+---
+
+## FEATURE 2: TIMESTAMP / JUMP-TO-MOMENT ✅ BUILT AND LIVE-TESTED Sep 2 evening
+Goal: when an answer comes from a video, show WHERE in the video + a link that jumps to that
+moment (`youtube.com/watch?v=VIDEO_ID&t=142s`). **Done — using the fetch-on-demand + cache
+approach that was planned and re-confirmed back in Aug 8, without any re-download.**
+
+**How it works (`app.py`):**
+- `_ensure_timestamp_cache_table(cursor)` — creates a `video_timestamps` table in Neon on first
+  use (`video_id TEXT PRIMARY KEY, segments JSONB, fetched_at TIMESTAMP DEFAULT now()`).
+- `get_timed_segments(video_id)` — checks the cache table first; on a miss, calls
+  `YouTubeTranscriptApi().fetch(video_id)` (no proxy — same un-proxied approach used by
+  `check_new_videos.py`) to get the REAL timed captions (`[{'text', 'start'}, ...]`), stores the
+  result in the cache table, and returns it. Returns `None` silently on any failure (video
+  unavailable, transcript disabled, etc.) rather than raising — callers treat that as "no
+  timestamp available," never as a hard error.
+- `find_timestamp_for_chunk(chunk_text, segments)` — best-effort string matching: rebuilds the
+  same flat `' '.join(...)` text that `embed_and_upload.py` originally chunked from, finds where
+  the cited chunk's text starts in that string (falls back from a 200-char match down to a
+  60-char match if needed), then walks the timed segments to find which caption's start time
+  that offset falls under. Returns `None` (never guesses) if no confident match is found.
+- `add_timestamp_links(chunks)` — called on every set of retrieved chunks right before they go
+  to Groq. For each chunk, tries to attach a `timestamp_url` (`{url}&t={start}s`); falls back to
+  the plain video URL if anything fails. This is silent/best-effort by design — a timestamp
+  lookup failing never breaks or delays an answer, it just means that one citation doesn't get
+  the extra `&t=` precision.
+- `ask_jeremy()`'s context-building line and system prompt were both updated to use
+  `c.get('timestamp_url') or c['url']` and to tell Groq it can mention "jump straight to it"
+  when a timestamp is present.
+- **Cost/traffic note:** only videos that actually get cited in a real answer ever trigger a
+  fetch — naturally scales with actual usage, never pays upfront for the whole library. Runs
+  un-proxied directly from wherever Streamlit Cloud's server is, same pattern as
+  `check_new_videos.py`'s home-IP-style fetches — no Decodo dependency for this feature turned
+  out to be needed at all.
+- **Live-tested:** the Mode 2 test above (Tesla in 2021) came back with real, distinct
+  timestamps for each cited video (`t=6 min 31s` / `&t=391s` and `t=2 min 7s` / `&t=127s`) —
+  confirming the fetch, cache-table write, and string-matching logic all work correctly end to
+  end on real data.
+
+This closes out the one feature that was flagged from the start as needing genuinely new data
+collection — it turned out not to need any, just a smarter display-time lookup.
+
+---
+
+## FEATURE 3: AUTOMATED DAILY NEW-VIDEO CHECK ✅ LIVE
+(unchanged — see earlier plan versions.) Weekly scheduled check watches run history for
+failures.
+
+## FEATURE 3B: HOME-IP MANUAL CHECK ✅ BUILT
+(unchanged — see earlier plan versions.)
+
+## FEATURE 3C: SPEAKER-VERIFIED FLAGGING IN APP ✅ BUILT
+(unchanged — see earlier plan versions.)
+
+## FEATURE 4: MULTI-CREATOR COMPARISON MODE ✅ BUILT AND LIVE-TESTED Sep 2 evening
+Enables questions like "what do Jeremy and Eric think about AMD" with real side-by-side
+retrieval, guaranteeing both creators are actually represented (rather than the old behavior,
+where a comparison question just got whatever mix of chunks the standard top-10 similarity
+search happened to return, with no guarantee both creators showed up).
+
+**How it works (`app.py`):**
+- `COMPARISON_JEREMY_ALIASES` / `COMPARISON_ERIC_ALIASES` + `detect_comparison_question()` —
+  deliberately conservative: only fires when BOTH a Jeremy-alias AND an Eric-alias appear in the
+  same question, so a question that just happens to mention one creator doesn't get mistakenly
+  treated as a comparison.
+- `search_transcripts_by_channels(query, channels, limit=6)` — same semantic search as the
+  standard path, restricted to a specific channel list.
+- `search_transcripts_comparison(query, limit_per_creator=5)` — runs `search_transcripts_by_
+  channels` separately for `JEREMY_CHANNELS` and for `['Eric Cuka']`, then concatenates the
+  results — guaranteeing real representation from both sides rather than leaving it to chance.
+- Checked FIRST in the router priority (before Mode 4/3/2) so a question naming both creators
+  never gets misrouted into a single-creator mode.
+- When triggered, an extra instruction is appended to the Groq prompt (not the retrieval query):
+  "Please contrast Jeremy's and Eric's views separately, noting where they agree or disagree.
+  Keep it concise — a short summary for each, not an exhaustive table — so the full answer fits
+  comfortably."
+
+**🐛 Bug found and fixed during rollout (2 iterations):** the first deploy answered "What do
+Jeremy and Eric think about buying stocks at all-time highs?" with a response that was cut off
+mid-sentence, and Eric's side of the comparison never appeared at all — the model ran out of
+its `max_tokens` budget (1000, unchanged since the app was first built) partway through Jeremy's
+side alone. **Fix, iteration 1:** raised `max_tokens` 1000 → 1800 in `ask_jeremy()`. Still
+truncated on retest (comparison answers with two detailed side-by-side tables need more room
+than a single-creator answer). **Fix, iteration 2:** raised `max_tokens` further to 2500, AND
+added the "keep it concise, not an exhaustive table" instruction above to the comparison-specific
+prompt addition, so the model isn't tempted to build an elaborate table that eats the whole
+budget. **Confirmed working on the third deploy:** same question now returns a complete,
+un-truncated answer with a proper "Where They Agree / Differ" comparison table covering both
+creators and a clear closing "Bottom line" summary for each. Modes 1-4 (single-creator) were
+never affected by this — they were tested at the original `max_tokens=1000` and completed fine;
+only the side-by-side comparison format needed the larger budget.
+**Worth remembering:** `max_tokens=2500` is now the standing value for ALL answers, not just
+comparisons (there's only one `ask_jeremy()` call site) — if a future feature adds more retrieved
+context or another multi-part answer format, keep this in mind as a potential place to raise the
+ceiling again if truncation resurfaces.
+
+## FEATURE 5: LANDING PAGE EXAMPLE QUESTIONS TRIMMED TO 2 ✅ DONE Sep 3 session
+The old landing page (shown before the first question is asked, in `app.py`'s
+`if not st.session_state.messages:` block) had 6 example questions laid out in two
+`st.columns(2)` columns — left over from before Feature 1 Modes 2-4, Feature 2, and Feature 4
+existed, so they didn't showcase any of the new search capabilities.
+
+**Replaced with exactly 2 questions, single column (no more `st.columns`):**
+- *"Is Jeremy still bullish on AMD?"* — chosen over the more obvious "Has Jeremy always been
+  bullish on AMD?" phrasing. Verified via direct regex testing that "still" does NOT trigger
+  `FIRST_MENTION_PATTERN`/`TIMELINE_PATTERN`, so this question actually routes to the plain
+  Mode 5 (standard top-10 similarity search), not the Mode 3/4 timeline retrieval — and
+  live-testing showed the plain-search answer was actually MORE complete than the timeline-mode
+  answer had been for a similarly-phrased question earlier in the Sep 2 session. Worth
+  remembering: `search_transcripts_timeline()`'s one-chunk-per-year window function can
+  actually LOSE relevant same-year content when multiple good matches exist in the same year —
+  a real limitation to keep in mind if timeline mode gets revisited later.
+- *"What do Jeremy and Eric think about buying stocks at all-time highs?"* — showcases Feature 4
+  (multi-creator comparison mode), which was the flagship feature of the Sep 2 evening session.
+
+Deployed via the same GitHub web-editor + synthetic-paste browser technique used throughout this
+project. Live-verified on https://ask-jeremy.streamlit.app/ — landing page now shows only these
+2 questions, single column, no leftover old questions or column-layout artifacts.
+
+---
+
+## FEATURE 6: HYBRID KEYWORD FALLBACK + RECENCY SORT FOR STANDARD SEARCH ✅ FIXED Sep 3 session, EXTENDED Sep 4
+**The bug report:** user asked "what is the latest instance of Jeremy talking about Wynn
+stock" and got back "the transcripts do not contain any mention of Wynn... Jeremy has not
+spoken about Wynn stock" - flatly wrong. The user knew this was wrong because a video titled
+"4 Stocks to Go ALL IN September 2026" (Financial Education, published 2 days earlier) talked
+about Wynn.
+
+**Investigation (this matters for future debugging - same playbook applies to any "the app
+says X isn't in the transcripts but I know it is" report):**
+1. Checked the `auto_update.yml` GitHub Actions run history - runs succeed daily (confirmed via
+   the Actions log viewer, which needed a specific selector `.js-check-line-content` to extract
+   text from, since GitHub's log viewer virtualizes/renders differently from a plain page).
+   Financial Education channel said "Nothing new" on the runs around when this video would have
+   been caught - which actually confirms the video WAS already ingested by an earlier run (the
+   "nothing new" check works by comparing against video IDs already in Neon), not that it was
+   missed.
+2. Found the exact video via YouTube search (confirmed: "4 Stocks to Go ALL IN September
+   2026‼️", Financial Education channel, video ID `Q6G8pXFkKLk`, 2 days old at the time).
+3. **Confirmed via a direct live-app test** ("What stocks does Jeremy mention in his video '4
+   Stocks to Go ALL IN September 2026'?") that the video's transcript IS searchable and in Neon
+   - the app correctly found and quoted it (Cheesecake Factory/CAKE). This proved the problem
+   wasn't ingestion - it was retrieval: the specific chunk mentioning Wynn (if any) just wasn't
+   among the top-10 chunks `search_transcripts()` (Mode 5, the fallback used for this question -
+   none of Modes 1-4's trigger patterns fired) returns from the whole ~36k-chunk corpus. A
+   single brief mention of a stock doesn't stand out enough semantically to beat thousands of
+   competing chunks on other topics, and/or it scored below the 0.3 similarity floor.
+
+**The fix (`app.py`, `search_transcripts()`):**
+- `STOCK_KEYWORD_PATTERN` + `extract_stock_keyword()` - pulls the word right before "stock" in
+  the question (e.g. "wynn stock" → "wynn", "AMD stock" → "AMD"). Deliberately narrow, not a
+  general entity extractor.
+- When a keyword is found, `search_transcripts()` now ALSO runs a literal `chunk_text ILIKE
+  '%keyword%'` query alongside the existing semantic search - a literal text match is a much
+  stronger relevance signal than embedding similarity for "does this stock get mentioned"
+  questions, and guarantees a real hit isn't lost to unrelated higher-scoring chunks. Keyword
+  hits are merged in FIRST (before semantic results) and deduped, so they survive the final
+  truncation to `limit` even when recency language isn't used - this was a bug in the first
+  draft of the fix (keyword hits were appended after the already-full semantic list and got cut
+  off by the truncation), caught and fixed before deploying.
+- `RECENCY_WORD_PATTERN` + `wants_most_recent_mention()` - True for "latest/most recent/last"
+  language that ISN'T Mode 1's "latest video" pattern (which requires "video" nearby and
+  bypasses search entirely via `get_latest_videos()`). When true, the merged/deduped results are
+  sorted by `upload_date` descending instead of similarity - so "latest instance of X" actually
+  means latest, not just whatever scored highest semantically.
+- Isolated entirely to `search_transcripts()` (Mode 5's fallback path) - verified via direct
+  regex testing that "Is Jeremy still bullish on AMD?" (the landing page's own example question,
+  no "stock" keyword) is completely unaffected, and that Modes 1-4's trigger patterns still take
+  priority correctly for questions that match them.
+
+**Live-tested after deploy:** re-asked the exact original question. The app now returns a real,
+well-reasoned answer - cites a verified June 1 2026 Jeremy Lefebvre (1000xstocks) mention of
+Wynn Resorts, correctly notes a later (July 5 2026) transcript in its context does NOT mention
+Wynn, and separately flags a still-later (May 28 2026) reaction-video mention as unverified
+speaker. **Caveat worth remembering:** the app did not end up citing the specific Sept 2026
+"4 Stocks to Go ALL IN" video as the latest instance. Most likely explanation: YouTube's
+auto-generated captions can misspell less-common names phonetically (Wynn is pronounced like
+"win"), so the literal word "Wynn" may simply not appear in that video's transcript text even
+if Jeremy said it out loud - a caption-accuracy issue, separate from and downstream of the
+retrieval bug fixed here. Not chased further this session (would need direct Neon access to
+confirm what that video's stored transcript actually spells it as) - worth keeping in mind if a
+similar "the app can't find X, but I know it's in there" report comes up again for a stock name
+that isn't spelled plainly/commonly.
+
+**UPDATE - same session, found again almost immediately:** next question, "what's Jeremy's
+latest take on Celcius" (note: user typo'd "Celsius"), hit TWO more gaps in the fix above:
+1. `extract_stock_keyword()` only recognized "X stock" phrasing - "take on Celcius" (no
+   trailing "stock") extracted no keyword at all, so the hybrid safety net never even engaged.
+2. Even if it had engaged, an exact `ILIKE '%celcius%'` wouldn't match the correctly-spelled
+   "Celsius" in the transcript - the mismatch here is the USER's typo, not a caption error (Wynn
+   was the caption-error case; Celsius is a common enough word that auto-captions almost
+   certainly spell it right).
+
+**Second round of fixes (same `app.py`, same session):**
+- `extract_stock_keyword()` broadened: still always checks "X stock" first, but for
+  recency-style questions specifically (gated via `wants_most_recent_mention()`, to avoid
+  widening false-positive risk for ordinary topic questions) it now also falls back to
+  whatever topic is named at the very end of the question via a new `TOPIC_TAIL_PATTERN`
+  (`"on X"` / `"about X"` near the end) - catches "latest take on Celsius", "most recent
+  mention of X", etc.
+- Added a fuzzy fallback: if the exact `ILIKE` keyword match comes up empty, `search_transcripts()`
+  now tries Postgres's `pg_trgm` extension (`CREATE EXTENSION IF NOT EXISTS pg_trgm`, then a
+  `word_similarity(keyword, chunk_text) > 0.5` query) to catch near-misses like "Celcius" vs
+  "Celsius". Wrapped in try/except with an explicit `conn.rollback()` on failure - if pg_trgm
+  isn't available on Neon for any reason, or the query errors, it just skips the fuzzy step
+  silently rather than breaking the whole search. Not able to confirm pg_trgm actually installs
+  cleanly on this Neon instance without direct DB access, but the live retest below shows the
+  overall fix path worked end-to-end.
+- **Live-tested:** re-asked "whats jeremys latest take on celcius" (typo intact) after
+  deploying. The app now correctly surfaces a Sept 1 2026 mention (same day as the Wynn video)
+  instead of the stale Aug 26 2026 quote from before, and correctly reasons "the Sept 1 excerpt
+  is the most recent, so it represents his latest publicly-recorded sentiment." Answer is
+  properly caveated as an unverified reaction-video source (flagged with the ⚠️ marker, per the
+  existing speaker-verification instruction in `ask_jeremy()`'s system prompt).
+- **Open caveat:** the source cited is a Sept 1 "Jeremy Lefebvre Makes Money" (reaction channel)
+  clip, not necessarily the specific "Financial Education" video ("4 Stocks to Go ALL IN
+  September 2026") the user had in mind for the Wynn bug - it's possible both channels posted
+  Celsius content the same day, or the merged candidate pool included both but the model
+  favored this one. Good enough to answer the user's actual question correctly and honestly
+  (real content, correctly identified as most recent, correctly flagged as unverified) - not
+  worth over-engineering further this session, but worth knowing if a future report asks why a
+  specific expected video isn't the one cited.
+
+**THIRD update - Sep 4 session, predicted third variant of the same bug showed up:** user asked
+"Is there a video from Jeremy within the last week where he mentions his projections for
+Netflix" and again got a false negative, even though the same "4 Stocks to Go ALL IN September
+2026" video (already confirmed ingested and searchable, per the Wynn investigation above)
+contains Jeremy showing his Netflix projections on screen ("...my bull case to Netflix...").
+
+**Root cause:** neither existing keyword path fired for this phrasing.
+`STOCK_KEYWORD_PATTERN` needs literal "X stock" (not present). `TOPIC_TAIL_PATTERN` only
+recognized "on X" / "about X" at the end of a recency-style question — "projections **for**
+Netflix" uses a preposition ("for") the pattern didn't know about, so `extract_stock_keyword()`
+returned `None`, the hybrid safety net never engaged, and pure semantic search ranked an old,
+heavily-Netflix-focused 2018 Goldman-Sachs-rating video above the brief, recent mention in a
+video mostly about other stocks.
+
+**The fix:** widened `TOPIC_TAIL_PATTERN`'s preposition group from `(?:on|about)` to
+`(?:on|about|for|regarding)`, so "his projections for Netflix" (and similar "for X"/"regarding
+X" phrasings) now extracts "Netflix" as a keyword and gets the same literal-ILIKE safety net as
+the "on X"/"about X" cases already had. No other logic changed — `wants_most_recent_mention()`
+gating and the merge/dedupe/sort behavior are unchanged.
+
+**Deploy note:** this was the first session where `device_commit_files` successfully wrote
+directly to the user's local `app.py` (previous sessions had this path unavailable/refused, and
+used the GitHub web-editor + synthetic-paste technique instead). Also used this session to
+discover and fix that the local file had drifted out of sync with the live app since Sep 2 — see
+the ⚠️ LOCAL FILE SYNC note near the top of this document. The corrected, fully-current `app.py`
+(including all of Sep 2-3's work plus this fix) was written to the user's computer directly;
+the user pushes it live themselves via `git add` / `git commit` / `git push` from VS Code.
+**Not yet live-tested against the actual Netflix question** at the time this plan was updated —
+worth confirming next session (or as soon as the user pushes and redeploys) that re-asking the
+original question now surfaces the "4 Stocks to Go ALL IN September 2026" video.
+
+---
+
+## 💡 FUTURE FEATURES
+- WhisperX speaker diarization for reaction channel.
+- Conflict detection (flag when a creator changed their mind on a stock).
+- Credibility tracker (did predictions come true?).
+- Multi-creator consensus tracker ("which stocks do Jeremy AND Eric both like right now?") —
+  now much more buildable given Feature 4's comparison retrieval already exists as a building
+  block.
+- Vision AI to extract data from 1000xstocks on-screen screenshots.
+- Password protection for private sharing.
+- "Load the boat" tracker.
+- Eric-specific catchphrases/personality once user is more familiar with his content style.
+- Wrap the Groq API call to gracefully handle a deprecated/missing model instead of crashing.
+- A unified unified Mode router (currently just an `elif` chain of independent detectors) if the
+  number of modes grows further and priority ordering gets harder to reason about.
+- ~~Fuzzy/phonetic keyword matching for the Feature 6 hybrid fallback~~ - added same day via
+  `pg_trgm`'s `word_similarity()` (see FEATURE 6's update). Still worth revisiting if a stock
+  name is phonetically SO different from its spelling (not just a typo/near-miss like
+  Celcius/Celsius) that trigram similarity doesn't bridge it either - a small manual
+  alias/synonym table per known ticker would be the next escalation.
+- Confirm whether `pg_trgm` actually installed successfully on the Neon instance (no direct DB
+  access this session to check) - if `CREATE EXTENSION IF NOT EXISTS pg_trgm` is silently
+  failing, the fuzzy fallback added in FEATURE 6 is a no-op every time. The Celsius live-test
+  passing is encouraging but doesn't fully prove the fuzzy path specifically fired (the broader
+  keyword extraction change alone might have been enough if "celcius" partially matched some
+  chunk via ILIKE, which is unlikely but not ruled out without checking logs/DB directly).
+- **New Sep 4:** given this bug class has now shown up THREE times with three different
+  prepositions/phrasings ("X stock", "on/about X", "for/regarding X"), consider whether a more
+  general fix is worth it eventually — e.g. always attempting a literal keyword/entity extraction
+  for any question that names a specific proper noun, rather than only gating it behind specific
+  phrasing patterns. Not done now (deliberately narrow, matching the existing style of this
+  fallback), but worth revisiting if a fourth phrasing variant turns up.
+
+---
+
+## 💰 DECODO BILLING (updated Aug 28)
+(unchanged — see earlier plan versions.) ✅ Pay As You Go confirmed working.
+
+## 🌙 KEEP-AWAKE: PREVENTING STREAMLIT SLEEP
+(unchanged — see earlier plan versions.) ✅ DONE Sep 2 morning session, confirmed working.
+
+## 🔔 MONITORING: SCHEDULED CHECKS
+(unchanged — see earlier plan versions.)
+
+---
+
+## 📝 KEY TECHNICAL NOTES
+- `cookies.txt` in project folder needed for yt-dlp downloads.
+- YouTube IP ban clears ~24–48 hrs after last request.
+- Decodo residential proxies for bulk downloading (Pay As You Go, ~$3.50-4/GB).
+- **Neon: create a FRESH connection per query — do NOT cache, it times out.**
+- **Groq input-context budget ~6,000 tokens/request; 10 chunks is BORDERLINE** — this limit is
+  about how much RETRIEVED CONTEXT gets sent in, separate from `max_tokens` (which limits the
+  OUTPUT/answer length and was the actual cause of the Feature 4 truncation bug above). Worth
+  keeping both budgets in mind separately going forward.
+- **`max_tokens=2500`** (in `ask_jeremy()`'s `groq_client.chat.completions.create(...)` call) —
+  raised from the original 1000 during this session's Feature 4 rollout; applies to every
+  answer, not just comparisons.
+- Chunking: 500 words, 50 overlap. Retrieval top-k of ~5–10 BEST chunks is the sweet spot.
+- Groq's chat completion is NOT deterministic by default (no `temperature` pinned).
+- **Groq model IDs can be deprecated/shut down with only ~2 months' notice.**
+- **Streamlit Community Cloud sleeps any app after 12 hours of no traffic** — handled by the
+  keep-awake GitHub Actions workflow.
+- **`YouTubeTranscriptApi().fetch(video_id)` returns objects with `.text`/`.start` attributes,
+  not dict-style `['text']`/`['start']`** — confirmed from `download_transcrips.py`'s existing
+  usage and reused for Feature 2's `get_timed_segments()`.
+- **Local `app.py` can silently drift from the live/deployed version** if changes are ever made
+  through a path other than this computer's own git repo (e.g. GitHub's web editor). Confirmed
+  happened Sep 2→Sep 4. Worth a quick sanity check at the start of any `app.py`-editing session.
+
+## 🔑 KEY ACCOUNTS
+- GitHub: speedyturtleco (repo: https://github.com/speedyturtleco/jeremy-rag-project, public)
+- Streamlit: https://ask-jeremy.streamlit.app/
+- Neon: jeremy-rag-project (AWS US East 2 Ohio)
+- Groq: free tier
+- Decodo: ✅ on Pay As You Go
+
+---
+
+## STATUS / WHERE WE LEFT OFF (Sep 4 session)
+- User reported a third variant of the Feature 6 bug class: a question about Jeremy's Netflix
+  projections (phrased "...projections **for** Netflix") came back with a false negative, even
+  though the relevant video (the same "4 Stocks to Go ALL IN September 2026" video from the
+  Wynn bug, already confirmed ingested) does contain the mention. Diagnosed as a gap in
+  `TOPIC_TAIL_PATTERN`, which only recognized "on X"/"about X", not "for X". Fixed by widening
+  the preposition list to `(?:on|about|for|regarding)`. Full writeup in FEATURE 6's third
+  update above.
+- **Bigger finding this session:** the local copy of `app.py` on the user's computer had not
+  been updated since before Sep 2 evening — three sessions' worth of shipped work (Feature 1
+  Modes 2-4, Feature 2, Feature 4, both earlier Feature 6 fixes) existed only on GitHub/live,
+  never pulled down locally. Caught this before patching on top of the stale version (which
+  would have silently reverted all of it on the next `git push`). Fixed by writing the current,
+  project-doc-verified `app.py` (with the new fix layered on) directly to the user's computer.
+  Added a standing warning note near the top of this file so future sessions check this first.
+- **Deploy path note:** for the first time, writing directly to the user's local file via the
+  device bridge worked (previous sessions logged this as unavailable). The user will run
+  `git add` / `git commit` / `git push` themselves from VS Code to actually deploy - not yet
+  confirmed live at the time this plan was updated.
+- **NEXT ACTION:** once the user pushes, live-test the original Netflix question (or something
+  close to it) to confirm the "4 Stocks to Go ALL IN September 2026" video now surfaces. Also
+  worth a quick general sanity check that local and live `app.py` stay in sync from here on.
+
+## STATUS / WHERE WE LEFT OFF (Sep 3 session)
+- Confirmed conversation memory still works correctly live (vague follow-up question, no
+  topic/keyword named, correctly answered using prior Q&A context).
+- Trimmed the landing page's "Try asking" examples from 6 (two columns) down to 2 (single
+  column) — see FEATURE 5 above for the exact questions and reasoning. Deployed and
+  live-verified.
+- Found and fixed a real bug: the standard search (Mode 5) could completely miss a stock that's
+  only mentioned once in the whole corpus (reported via the "Wynn stock" question). Added a
+  hybrid literal-keyword fallback + recency-aware sorting - see FEATURE 6 above for the full
+  investigation, fix, and live-test results, plus a caveat about auto-caption spelling accuracy
+  that's a good candidate for a future fuzzy-matching improvement.
+- Same bug class immediately resurfaced with a differently-phrased question ("latest take on
+  Celcius" - typo'd) - broadened keyword extraction to catch "on X"/"about X" phrasing (not just
+  "X stock"), and added a `pg_trgm` fuzzy-match fallback for typos/near-misses. Live-tested with
+  the exact typo intact - now correctly surfaces same-day content instead of a stale answer. See
+  FEATURE 6's update for full details and an open caveat about which exact video gets cited.
+- **NEXT ACTION:** no urgent open items. Good time to just use the app normally, or pick
+  something from 💡 FUTURE FEATURES - though given this bug class has now shown up twice in one
+  session with two different phrasings, it's worth staying a little alert for a third variant
+  next time the app is used for a "what's the latest on X" style question.
+
+## STATUS / WHERE WE LEFT OFF (Sep 2, evening session)
+- Everything from the Sep 2 morning session (date backfill, monitoring, keep-awake) closed out
+  — see prior STATUS entry below for that recap, still accurate.
+- **Built and deployed, in order, per the user's request ("feature one through feature four"):**
+  - Feature 1 Mode 2 (specific time period) — ✅ built, live-tested (Tesla/2021 question).
+  - Feature 1 Modes 3 & 4 (timeline/evolution + first mention) — ✅ built, live-tested (AMD
+    "has Jeremy always been bullish" question, which exercises the shared retrieval + Mode 4's
+    specific framing).
+  - Feature 2 (timestamp/jump-to-moment links) — ✅ built, live-tested (confirmed real, distinct
+    `&t=Ns` links on the same Tesla/2021 test above).
+  - Feature 4 (multi-creator comparison mode) — ✅ built, but needed 2 rounds of fixes after the
+    first live test showed a truncated, Eric-less answer. Root cause: `max_tokens` (1000, never
+    revisited since the app was first built) wasn't enough for a two-creator side-by-side
+    answer. Fixed by raising `max_tokens` to 2500 and adding a "keep it concise" instruction to
+    the comparison-specific prompt. Confirmed working cleanly on the third deploy.
+- All changes deployed via GitHub's web file editor (browser-driven, pasted content in via a
+  synthetic clipboard-paste event since `device_commit_files` and computer-use/VS Code typing
+  were both unavailable paths this session) — 3 commits total to `app.py`:
+  "Add time-period search, timeline/first-mention arc, comparison mode, and timestamp links",
+  then two "Update app.py" commits for the max_tokens fix iterations.
+- **NEXT ACTION:** no urgent open items. The original roadmap (Feature 1 all modes, Feature 2,
+  Feature 4) is now fully built and live-tested. Good time to just use the app normally for a
+  while and see what surfaces, or pick something from 💡 FUTURE FEATURES if there's appetite to
+  keep building.
+
+## SESSION LOG (recent — see git history / earlier plan versions for full history back to Jun 26)
+- Jun 26 – Aug 28: see prior plan versions for full early history.
+- **Sep 2 (morning session):** confirmed `update_neon_dates.py` had run successfully (live-app
+  test rather than direct DB query, which wasn't reachable this session). Set up 3 recurring
+  scheduled checks (GitHub Actions health, Groq deprecation, Decodo balance). Researched and
+  built a fix for Streamlit's 12-hour inactivity sleep: `keep_app_awake.py` (Playwright wake
+  script) + `.github/workflows/keep_awake.yml`, created directly through GitHub's web editor
+  (browser-driven) since `device_commit_files` blocks remote writes to workflow files.
+  Confirmed working via a manual trigger (40s successful run).
+- **Sep 2 (evening session, this one):** User asked to build Feature 1 (Modes 2-4), Feature 2,
+  and Feature 4, in that order, all in one go. Read the existing `app.py` and
+  `download_transcrips.py` (to confirm the exact `YouTubeTranscriptApi` usage pattern) directly
+  from the device. Wrote a complete new `app.py` locally adding: `search_transcripts_by_period`
+  (Mode 2), `search_transcripts_timeline` (Modes 3 & 4, via a Postgres window function),
+  `search_transcripts_comparison`/`search_transcripts_by_channels` (Feature 4), and
+  `get_timed_segments`/`find_timestamp_for_chunk`/`add_timestamp_links` (Feature 2, with a new
+  `video_timestamps` Neon cache table). Validated locally with `py_compile` and `pyflakes`.
+  Deployed via GitHub's web file editor, driven through the browser pane (computer-use couldn't
+  type into VS Code — IDEs are click-only under that feature's access tiers — and
+  `device_commit_files` refuses `.github/workflows/*.yml` but `app.py` itself isn't
+  workflow-protected; used the already-proven browser/paste-event technique for consistency and
+  because a fresh session's `device_bash` tooling wasn't available here). Learned mid-session
+  that a screenshot taken immediately after a DOM change (or right after a click that opens a
+  modal) can be stale/misleading in this browser tool — confirmed real state instead via
+  `document.querySelector('.cm-content').innerText` checks and, once, via a `[role="dialog"]`
+  existence check when a screenshot said "empty file" but JS proved the real content was there.
+  Also learned CodeMirror's editor only renders visible lines to the DOM (virtualized), so an
+  `.innerText.length` check right after a big paste can look wrong (e.g. `3651` instead of
+  `~26000`) purely because most of the document isn't scrolled into view — checking the START
+  and END of the document (via `ctrl+Home`/`ctrl+End`) is the reliable way to confirm a large
+  paste succeeded, not a raw length count. Live-tested each new feature directly against the
+  live app: Mode 2 (Tesla/2021 — correct, year-filtered, with real timestamp links), Mode 4
+  (AMD "has Jeremy always been bullish" — correct table, correctly concluded "never bullish"
+  rather than overclaiming), and Feature 4 (Jeremy+Eric comparison), which failed its first two
+  live tests with a truncated, single-creator-only answer. Diagnosed as a `max_tokens` (output
+  length) limit, not a retrieval bug — the original app had never revisited its
+  `max_tokens=1000` setting from when it only ever needed to describe one creator's view.
+  Fixed in two iterations (1000→1800, still truncated; 1800→2500 plus a "keep it concise"
+  prompt addition, confirmed clean) — each iteration required redeploying `app.py` via the same
+  GitHub web-editor flow and re-verifying the paste before committing. Updated this plan and the
+  project's saved `app.py` doc to reflect the finished work in the same session, per the
+  standing "keep docs synced" rule.
+- **Sep 3 (this session):** Live-tested conversation memory with a genuinely vague follow-up
+  question (no topic or keyword named) — confirmed the app correctly pulled context from the
+  prior exchange. Then updated the landing page: replaced the old 6-question, two-column
+  "Try asking" list with just 2 questions chosen to showcase the Sep 2 session's new features
+  (see FEATURE 5). Before finalizing the AMD question's exact wording, verified via direct
+  Python regex testing against `app.py`'s pattern constants which search mode it would trigger,
+  and confirmed via live test that the chosen phrasing ("still" rather than "always") produces a
+  more complete answer than the timeline-mode phrasing had, revealing a real (documented)
+  limitation in `search_transcripts_timeline()`. Deployed via the same GitHub web-editor +
+  synthetic-paste technique, verified the paste landed correctly (checked document start, end,
+  and the specific edited section — CodeMirror's virtualized rendering means only scrolled-into-
+  view lines exist in the DOM, so `scrollTop` must be set directly and given a short delay before
+  re-reading `innerText`), committed, and live-verified the redeployed app.
+- **Sep 3 (later same session):** User reported the "Wynn stock" bug (see FEATURE 6). Diagnosed
+  by checking the `auto_update.yml` Actions run history (confirmed daily runs succeeding — had
+  to find the right selector, `.js-check-line-content`, to pull real log text out of GitHub's
+  virtualized log viewer), identifying the actual video via YouTube search, and confirming via a
+  live-app test that the video's transcript WAS already in Neon — isolating the bug to
+  `search_transcripts()`'s plain top-10 semantic search, not the ingestion pipeline. Built a
+  hybrid keyword-fallback + recency-sort fix, caught and corrected a bug in the first draft of
+  my own fix during local logic testing (keyword hits could get truncated away when the question
+  didn't use recency language — fixed by merging keyword hits first, before semantic results).
+  Verified the regex/merge logic locally in Python (no DB needed) before deploying, confirming
+  both that the exact bug-report question now extracts the right keyword and recency intent, and
+  that the already-tested "Is Jeremy still bullish on AMD?" example question is completely
+  unaffected. Deployed via the same GitHub web-editor + synthetic-paste flow, verified the paste
+  (start/end/middle-section checks), committed, and live-tested the exact original question —
+  confirmed the app now returns a real, well-reasoned, correctly-sourced answer instead of a
+  false "no mention found." Updated this plan and the project's saved `app.py` doc.
+- **Sep 3 (immediately after the above):** User's very next question ("what's jeremy's latest
+  take on celcius", typo'd) exposed two more gaps in the just-shipped fix: the keyword
+  extractor didn't recognize "take on X" phrasing (only "X stock"), and even if it had, the
+  user's typo wouldn't exact-match the correctly-spelled word in the transcript. Broadened
+  `extract_stock_keyword()` to catch a topic named at the end of a recency-style question, and
+  added a `pg_trgm`-based fuzzy fallback (`word_similarity()`) for when the exact `ILIKE` match
+  comes up empty - wrapped in try/except with `conn.rollback()` so a missing extension or query
+  error can't break search entirely. Verified the regex logic locally before deploying (same
+  test-first pattern as the first fix), deployed via the same GitHub web-editor flow, verified
+  the paste, committed, and live-tested with the user's exact typo intact - confirmed the app
+  now correctly surfaces same-day (Sept 1) content instead of the stale Aug 26 answer from
+  before, correctly reasons about which excerpt is most recent, and correctly flags the
+  unverified reaction-video source. Noted an open caveat (which exact video gets cited) rather
+  than over-chasing it further. Updated this plan and the project's saved `app.py` doc again.
+- **Sep 4 (this session):** User asked whether a microphone/voice-input button could be added
+  to the app (separate, unimplemented discussion — landed on "try Windows+H system dictation
+  first, real mic button is a possible future build using `st.audio_input` + Groq Whisper
+  transcription" — not yet built). Then user reported a third variant of the Feature 6 bug
+  class: a "projections for Netflix" question came back with a false negative for the same "4
+  Stocks to Go ALL IN September 2026" video already confirmed ingested during the Wynn
+  investigation. Diagnosed the gap (`TOPIC_TAIL_PATTERN` didn't recognize "for X" phrasing,
+  only "on X"/"about X") without needing to re-investigate ingestion, since that had already
+  been ruled out for this exact video. Before patching, requested folder access to the user's
+  `jeremy-rag-project` directory via the device bridge and discovered the local `app.py` was
+  three sessions stale (missing everything shipped Sep 2 evening onward) because those deploys
+  went straight to GitHub's web editor and were never pulled down locally. Wrote the current,
+  project-doc-verified `app.py` — with the new "for/regarding" fix layered on top — directly to
+  the user's computer via `device_commit_files` (worked this session, unlike prior sessions),
+  bringing local and live back into sync in the same step as fixing the bug. Verified the fixed
+  file with `py_compile` before committing it. Updated this plan (added the ⚠️ LOCAL FILE SYNC
+  warning near the top, extended FEATURE 6, added this STATUS/SESSION LOG entry) and the
+  project's saved `app.py` doc. User will deploy via `git add`/`git commit`/`git push` from VS
+  Code themselves — not yet live-tested against the actual Netflix question.

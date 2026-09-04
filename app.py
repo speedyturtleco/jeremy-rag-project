@@ -342,8 +342,14 @@ model = load_model()
 #      (Postgres pg_trgm's word_similarity) that only kicks in when the exact match comes up
 #      empty - best-effort and wrapped in try/except so a missing extension or any DB hiccup
 #      just skips the fuzzy step instead of breaking the whole search.
+#
+# Third bug found Sep 4: "projections for Netflix" was missed entirely - the topic-tail
+# extraction below only recognized "on X" / "about X" phrasing, not "for X". Widened the
+# preposition list to also catch "for" and "regarding" so a question like "his projections
+# for Netflix" (from the "4 Stocks to Go ALL IN September 2026" video) gets the same keyword
+# safety net as the "on X"/"about X" phrasings already did.
 STOCK_KEYWORD_PATTERN = re.compile(r'\b([A-Za-z][A-Za-z.\-]{1,15})\s+stock\b', re.IGNORECASE)
-TOPIC_TAIL_PATTERN = re.compile(r'\b(?:on|about)\s+([A-Za-z][A-Za-z.\-]{1,20})\b\s*[?.!]*\s*$', re.IGNORECASE)
+TOPIC_TAIL_PATTERN = re.compile(r'\b(?:on|about|for|regarding)\s+([A-Za-z][A-Za-z.\-]{1,20})\b\s*[?.!]*\s*$', re.IGNORECASE)
 RECENCY_WORD_PATTERN = re.compile(r'\b(latest|newest|most recent|last)\b', re.IGNORECASE)
 
 
@@ -359,10 +365,11 @@ def wants_most_recent_mention(question):
 def extract_stock_keyword(question):
     """Pulls a likely stock/topic keyword out of the question. Always catches 'X stock'
     phrasing (e.g. 'wynn stock', 'AMD stock'). For recency-style questions only ('latest take
-    on X', 'most recent mention of X') also falls back to whatever topic is named at the very
-    end of the question - broader and more false-positive-prone, so it's deliberately gated to
-    only the recency-question case rather than applying to every question (which could risk
-    dragging in an ILIKE-matched-but-not-actually-relevant chunk for a plain topic question)."""
+    on X', 'most recent mention of X', 'projections for X') also falls back to whatever topic
+    is named at the very end of the question - broader and more false-positive-prone, so it's
+    deliberately gated to only the recency-question case rather than applying to every question
+    (which could risk dragging in an ILIKE-matched-but-not-actually-relevant chunk for a plain
+    topic question)."""
     match = STOCK_KEYWORD_PATTERN.search(question)
     if match:
         return match.group(1)

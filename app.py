@@ -396,7 +396,20 @@ def extract_stock_keyword(question):
     return None
 # ===================================================================================================
 
-def search_transcripts(query, limit=10):
+def search_transcripts(query, limit=10, raw_question=None):
+    """`query` is what gets embedded for semantic search - when called with conversation
+    memory active, this is build_search_query()'s output, which APPENDS the previous
+    question+answer after the current one (so semantic search can use that context). But
+    extract_stock_keyword()'s TOPIC_TAIL_PATTERN anchors to the END of the string ('for X$') -
+    once prior conversation text is appended after the real question, that anchor lands on the
+    end of the OLD answer instead, and keyword extraction silently returns None even though the
+    current question clearly named a topic. Bug found Sep 5: asked a Wynn follow-up right after
+    a Netflix question in the same session - extraction failed, the keyword safety net never
+    engaged, and semantic search (skewed toward the appended Netflix context) returned a context
+    full of Netflix chunks, so Groq correctly-but-wrongly reported "no Wynn mentions" from what
+    it was given. Fix: `raw_question` carries the actual, un-appended current question so
+    extract_stock_keyword() always looks at what the user actually just asked, regardless of
+    whatever conversation context got appended to `query` for the embedding step."""
     embedding = model.encode(query).tolist()
     conn = psycopg2.connect(os.getenv("NEON_DATABASE_URL"))
     cursor = conn.cursor()
@@ -406,7 +419,7 @@ def search_transcripts(query, limit=10):
     )
     results = cursor.fetchall()
 
-    keyword = extract_stock_keyword(query)
+    keyword = extract_stock_keyword(raw_question if raw_question is not None else query)
     if keyword:
         cursor.execute(
             "SELECT title, channel, video_type, upload_date, url, speaker_verified, chunk_text, "
@@ -470,7 +483,7 @@ def search_transcripts(query, limit=10):
         }
         for r in results
     ]
-    if keyword and wants_most_recent_mention(query):
+    if keyword and wants_most_recent_mention(raw_question if raw_question is not None else query):
         chunks.sort(key=lambda c: c['upload_date'] or '', reverse=True)
     return chunks[:limit] if len(chunks) > limit else chunks
 def build_search_query(prompt, history, max_context_chars=800):
@@ -674,7 +687,7 @@ if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
             chunks = search_transcripts_by_period(search_query, year, half, channels=target_channels)
         else:
             search_query = build_search_query(prompt, conversation_history)
-            chunks = search_transcripts(search_query)
+            chunks = search_transcripts(search_query, raw_question=prompt)
         top_channel = chunks[0].get('channel', '') if chunks else ''
         is_jeremy = top_channel in JEREMY_CHANNELS
         spinner_text = 'Flipping your flapjacks... 🥞' if is_jeremy else 'Digging through the transcripts... 🔍'

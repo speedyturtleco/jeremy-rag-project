@@ -3,33 +3,35 @@
 ---
 ## 🚦 START HERE — NEXT SESSION FIRST ACTION (updated Sep 5 session, later same day)
 
-**THREE bugs found and fixed this session. Two confirmed live-tested working; the newest one
-(Feature 9) is fixed and pushed to the user's computer but NOT YET pushed to GitHub or
-live-tested - that's the first thing to check next session.**
-FEATURE 7 (Groq mislabeling Jeremy's own channels as "not Jeremy's") - fixed AND live-tested
-working. FEATURE 8 (conversation-memory context stuffing silently breaking keyword extraction
-on follow-up questions) - fixed AND live-tested working (see FEATURE 8 below). FEATURE 9
-(wrong/misleading video timestamps from a non-unique text match) - fixed and verified written to
-the user's local `app.py`, but the user still needs to `git add`/`git commit`/`git push` it, and
-it has NOT been live-tested yet. Everything from Sep 2-4 (Feature 1 Modes 2-4, Feature 2,
-Feature 4, all three Feature 6 fixes) is still done and live.**
+**THREE bugs found, fixed, pushed, AND live-tested working this session - nothing left pending
+from Sep 5.** FEATURE 7 (Groq mislabeling Jeremy's own channels as "not Jeremy's"), FEATURE 8
+(conversation-memory context stuffing silently breaking keyword extraction on follow-up
+questions), and FEATURE 9 (wrong/misleading video timestamps from a non-unique text match) are
+all fixed, on GitHub, and confirmed live. Everything from Sep 2-4 (Feature 1 Modes 2-4, Feature 2,
+Feature 4, all three Feature 6 fixes) is still done and live.
+
+**One small, unaddressed, low-priority item spotted during Feature 9's live-test:** dollar
+amounts occasionally render garbled (e.g. "$889B" showing as broken LaTeX-looking text) - likely
+Streamlit misinterpreting `$` as markdown math syntax. See the note at the end of the FEATURE 9
+section below. Not urgent, not yet fixed - good candidate for a future session if it keeps
+showing up.
 
 **⚠️ Also: a process mistake happened and was caught/fixed earlier this session - see the new
 callout right after the "HOW TO WORK WITH ME" section below. Read it before ever telling the
 user to run `git reset --hard` again.**
 
-0. ✅ **BUG FOUND & FIXED Sep 5 (later): wrong video timestamp shown for a cited excerpt** — user
-   asked "when is the most recent time jeremy mentions amazon projections?" and got an answer
-   citing a real Nov 2025 Financial Education video, but the "jump to it" timestamp (≈2:45)
-   pointed at the wrong part of the video, not the actual Amazon-trillion-dollar segment being
-   quoted. Root cause and fix are in the new FEATURE 9 section below - short version: the
-   timestamp-matching code's 60-character fallback snippet could match more than one place in a
-   long video's transcript, and it was silently taking the FIRST match instead of checking
-   whether the match was actually unique. Fixed by requiring uniqueness before trusting a match,
-   returning no timestamp (falls back to the plain video link) rather than guessing wrong.
-   **Verified written to the user's local `app.py` (staged back and diffed to confirm) - user
-   still needs to push it to GitHub and it has NOT been live-tested yet.** Do this first next
-   session.
+0. ✅ **BUG FOUND, FIXED & LIVE-TESTED Sep 5 (later): wrong video timestamp shown for a cited
+   excerpt** — user asked "when is the most recent time jeremy mentions amazon projections?" and
+   got an answer citing a real Nov 2025 Financial Education video, but the "jump to it" timestamp
+   (≈2:45) pointed at the wrong part of the video, not the actual Amazon-trillion-dollar segment
+   being quoted. Root cause: the timestamp-matching code's 60-character fallback snippet could
+   match more than one place in a long video's transcript, and it was silently taking the FIRST
+   match instead of checking whether the match was actually unique. Fixed by requiring uniqueness
+   before trusting a match, returning no timestamp (falls back to the plain video link) rather
+   than guessing wrong. Pushed to GitHub (commit `9071be2`) and **confirmed fixed via live
+   re-test**: the same video now correctly shows no timestamp instead of a wrong one, while other
+   citations in the same answer that had unambiguous matches kept their working timestamps. Full
+   details in FEATURE 9 below.
 1. ✅ **BUG FOUND & FIXED Sep 5: keyword extraction silently broken by conversation-memory
    context stuffing** — a same-session follow-up question ("...projections for wynn?" asked
    right after a Netflix question) got a false "no mention found" even though the exact "for X"
@@ -738,11 +740,29 @@ this project's saved `app.py` copy, then pushed to the user's local `app.py` via
 `device_commit_files` - **verified landed correctly** by staging the file back and confirming
 `md5sum` matched the source (first `device_commit_files` call silently didn't take effect despite
 reporting success, exactly the known pattern from earlier this session - retried once with
-`force: true`, then verified again and it matched). **Still needed before this is live:** the
-user runs `git add app.py` / `git commit` / `git push` themselves, then this should be
-live-tested by re-asking the Amazon projections question and confirming the "jump to it" link
-now either points at the right moment or omits the timestamp entirely (both are correct outcomes
-- pointing at the WRONG moment is the only failure mode this fix rules out).
+`force: true`, then verified again and it matched). User pushed via `git add`/`git commit`/
+`git push` - commit `9071be2`.
+
+**✅ Live-tested and CONFIRMED FIXED same session:** re-asked "when is the most recent time
+jeremy mentions amazon projections?" after the push/redeploy. The exact video that previously
+showed the wrong ≈2:45 timestamp (24 Nov 2025 Financial Education, trillion-dollar-plus revenue
+projection) now correctly shows NO timestamp instead of a wrong one - the app's own citation
+text says "no timestamp supplied, but the comment appears in the latter half of the video,"
+which is exactly the intended fallback behavior (a working plain video link, no false precision)
+rather than confidently pointing at the wrong spot. The other two cited videos in the same
+answer (Dec 2023, Jan 2023) still got working timestamps (12-min mark, 4-min mark respectively) -
+confirms the uniqueness check isn't over-broadly killing timestamps that were already correct,
+only the ones that were actually ambiguous. Feature 9 fully closed out.
+
+**Separate, unaddressed issue spotted during this live-test (not part of Feature 9, not yet
+fixed):** the same answer's Jan 2023 row rendered a garbled mess where a dollar amount should be
+(`889 B∗∗,netincomeof∗∗58 B` instead of "$889B ... net income of $58B"). Almost certainly
+Streamlit's markdown renderer misinterpreting `$...$` pairs in Groq's answer text as LaTeX math
+delimiters rather than literal dollar signs - a rendering/display bug, unrelated to retrieval or
+timestamps. Not fixed this session (user only flagged the timestamp) - worth fixing next time
+dollar amounts show up wrong, likely by having `ask_jeremy()`'s system prompt instruct Groq to
+avoid bare `$number` formatting (e.g. write "889 dollars" or escape it), or by escaping/sanitizing
+`$` in the answer text before it's rendered.
 
 ---
 

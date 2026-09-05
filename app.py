@@ -13,6 +13,22 @@ groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 JEREMY_CHANNELS = ['Financial Education', 'Jeremy Lefebvre Makes Money']
 
+# Bug found Sep 5: asked "projections for Netflix" (the Netflix fix from Sep 4 was live), and
+# the app DID find real Financial Education content with detailed Netflix numbers - but Groq's
+# answer said those excerpts were "not Jeremy's channel." Root cause: the context string built
+# for Groq (see ask_jeremy() below) only ever included the raw Neon `channel` value (e.g.
+# "Financial Education"), never the actual creator's name - so the model had no way to know
+# that "Financial Education" and "1000xstocks" are channels Jeremy Lefebvre personally runs,
+# and reasonably assumed a channel not literally named "Jeremy Lefebvre ___" belonged to someone
+# else. This maps every channel to the real creator's name so that mapping is explicit in every
+# excerpt tag instead of left for the model to guess.
+CHANNEL_CREATOR = {
+    'Financial Education': 'Jeremy Lefebvre',
+    'Jeremy Lefebvre Makes Money': 'Jeremy Lefebvre',
+    '1000xstocks': 'Jeremy Lefebvre',
+    'Eric Cuka': 'Eric Cuka',
+}
+
 # ============ Feature 1, Mode 1: recency questions ("what's the latest video from X") ============
 # Maps how a user might refer to a creator to the actual `channel` value(s) in Neon.
 # 'jeremy' is ambiguous (his main channel + the reaction channel where he's still the owner),
@@ -569,7 +585,8 @@ def add_timestamp_links(chunks):
 
 def ask_jeremy(question, context_chunks):
     context = '\n\n'.join([
-        f"[{c['channel']} | {c['upload_date'] or 'Unknown date'} | {c.get('timestamp_url') or c['url']} | "
+        f"[Creator: {CHANNEL_CREATOR.get(c['channel'], c['channel'])} | Channel: {c['channel']} | "
+        f"{c['upload_date'] or 'Unknown date'} | {c.get('timestamp_url') or c['url']} | "
         f"{c['channel'] + ' speaking, verified' if c['speaker_verified'] else 'UNVERIFIED SPEAKER - reaction video, may not be the channel owner'}]\n"
         f"{c['chunk_text']}"
         for c in context_chunks
@@ -579,7 +596,7 @@ def ask_jeremy(question, context_chunks):
         messages=[
             {
                 "role": "system",
-                "content": "You are an AI assistant that answers questions based on YouTube transcripts from multiple finance content creators, including Jeremy Lefebvre and Eric Cuka. Always mention which creator and video the information came from, when it was said, and include the video URL as a clickable link so the user can watch the source (if the URL includes a '&t=Ns' timestamp, that points at roughly the right moment in the video - mention that they can jump straight to it). If the transcripts include more than one creator's view on the same topic, present each person's view separately and note where they agree or disagree, rather than blending them into one answer. If opinions have changed over time for a given creator, note that, and if transcripts span multiple years on the same topic, briefly trace how the view evolved chronologically. If the transcripts don't contain enough information, say so clearly. Keep answers concise and well organized. SPEAKER VERIFICATION: each excerpt is tagged either '{Channel} speaking, verified' or 'UNVERIFIED SPEAKER - reaction video, may not be the channel owner'. Reaction-channel excerpts are that channel's owner reacting to or discussing someone else's content, so the opinion voiced may belong to a guest or the creator being reacted to, not the channel owner. You may still use unverified excerpts to answer, but you must clearly flag them - e.g. '⚠️ from a reaction video, may not be the channel owner's own view' - and never present an unverified excerpt as that person's confirmed opinion. IMPORTANT: If Jeremy Lefebvre used the phrase 'load the boat' about a stock in the transcripts, always highlight that with a 🚢 emoji and make it clear he was extremely bullish."
+                "content": "You are an AI assistant that answers questions based on YouTube transcripts from multiple finance content creators. Every excerpt below is tagged with both a 'Creator' (the real person) and a 'Channel' (the specific YouTube channel/property the excerpt came from) - always use the Creator field to decide whose opinion this is, never guess from the channel name alone. Jeremy Lefebvre personally runs THREE channels/properties that all count as his own words when the speaker is verified: 'Financial Education' (his main channel), '1000xstocks' (his stock-analysis site/channel), and 'Jeremy Lefebvre Makes Money' (his reaction channel - see the speaker-verification note below). Eric Cuka's content comes from the 'Eric Cuka' channel. Always mention which creator and video the information came from, when it was said, and include the video URL as a clickable link so the user can watch the source (if the URL includes a '&t=Ns' timestamp, that points at roughly the right moment in the video - mention that they can jump straight to it). If the transcripts include more than one creator's view on the same topic, present each person's view separately and note where they agree or disagree, rather than blending them into one answer. If opinions have changed over time for a given creator, note that, and if transcripts span multiple years on the same topic, briefly trace how the view evolved chronologically. If the transcripts don't contain enough information, say so clearly. Keep answers concise and well organized. SPEAKER VERIFICATION: each excerpt is tagged either '{Channel} speaking, verified' or 'UNVERIFIED SPEAKER - reaction video, may not be the channel owner'. Reaction-channel excerpts are that channel's owner reacting to or discussing someone else's content, so the opinion voiced may belong to a guest or the creator being reacted to, not the channel owner. You may still use unverified excerpts to answer, but you must clearly flag them - e.g. '⚠️ from a reaction video, may not be the channel owner's own view' - and never present an unverified excerpt as that person's confirmed opinion. IMPORTANT: If Jeremy Lefebvre used the phrase 'load the boat' about a stock in the transcripts, always highlight that with a 🚢 emoji and make it clear he was extremely bullish."
             },
             {
                 "role": "user",

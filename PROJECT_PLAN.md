@@ -1,27 +1,38 @@
 # Ask Jeremy — Master Project Plan & Memory File
 
 ---
-## 🚦 START HERE — NEXT SESSION FIRST ACTION (updated Sep 4 session)
+## 🚦 START HERE — NEXT SESSION FIRST ACTION (updated Sep 5 session)
 
-**Same bug class as Sep 3, third variant: found and fixed a "for X" phrasing gap in the
-keyword-fallback fix (see FEATURE 6's second update below). Also discovered and fixed a bigger
-standing risk: the LOCAL copy of `app.py` on the user's computer had drifted out of sync with
-the live/deployed version — see the new ⚠️ LOCAL FILE SYNC note right below the "HOW TO WORK
-WITH ME" section. Everything from Sep 2 evening and Sep 3 (Feature 1 Modes 2-4, Feature 2,
-Feature 4, and the first two Feature 6 fixes) is still done and live — see below.**
+**Sep 4's Netflix fix (widened `TOPIC_TAIL_PATTERN`) is confirmed live and DID work at the
+retrieval level - re-asking the Netflix question live-tested Sep 5 no longer says "no mention
+found," it actually surfaces real Financial Education excerpts with specific Netflix numbers.
+But live-testing surfaced a NEW, separate bug: Groq's answer labeled those Financial Education
+excerpts "not Jeremy's channel," which is flatly wrong (Financial Education is Jeremy's own
+main channel). Root cause and fix - a new FEATURE 7 - below. Everything from Sep 2-4 (Feature 1
+Modes 2-4, Feature 2, Feature 4, all three Feature 6 fixes) is still done and live.**
 
-1. ✅ **BUG FOUND & FIXED Sep 4: "for X" / "regarding X" phrasing missed by the keyword
+1. ✅ **BUG FOUND & FIXED Sep 5: Groq mislabeled Jeremy's own channels as "not Jeremy's
+   channel"** — live-testing the Sep 4 Netflix fix showed real progress (the app now finds and
+   quotes real, dated Netflix content instead of a blanket "no mention found") but revealed a
+   new bug: Groq's answer said Financial Education excerpts were "not Jeremy's channel." Root
+   cause: the context sent to Groq only ever included the raw Neon `channel` value (e.g.
+   "Financial Education"), never an explicit mapping to the real creator - so the model had no
+   way to know Jeremy personally runs that channel, and guessed wrong. Fixed by adding an
+   explicit `CHANNEL_CREATOR` mapping to every excerpt tag and to the system prompt. Full
+   details in the new FEATURE 7 section below. **Not yet live-tested after this fix** - worth
+   confirming next session.
+2. ✅ **BUG FOUND & FIXED Sep 4: "for X" / "regarding X" phrasing missed by the keyword
    safety net** — user reported that a question about Jeremy's Netflix projections (from the
    video "4 Stocks to Go ALL IN September 2026") came back with a false "no mention found."
    Same root cause family as the Wynn/Celsius bugs: `TOPIC_TAIL_PATTERN` only recognized "on X"
    / "about X" at the end of a question, not "for X" - so "his projections **for** Netflix"
    never triggered the literal keyword search. Fixed by widening the preposition list. Full
    details in FEATURE 6's third update below.
-2. ✅ **IMPORTANT PROCESS FIX Sep 4: local `app.py` was stale, now back in sync** — see the new
+3. ✅ **IMPORTANT PROCESS FIX Sep 4: local `app.py` was stale, now back in sync** — see the new
    note below. Going forward, confirm local vs. live are in sync at the start of any session
    that touches `app.py`, since deploys have been happening straight to GitHub without always
    updating the local copy.
-3. **This session's deploy path was different:** for the first time, `device_commit_files`
+4. **This session's deploy path was different:** for the first time, `device_commit_files`
    successfully wrote directly to the user's local `app.py` (previous sessions logged this as
    unavailable/refused). The user will `git add` / `git commit` / `git push` from VS Code
    themselves to actually deploy - worth trying this path again before assuming the GitHub
@@ -493,6 +504,59 @@ original question now surfaces the "4 Stocks to Go ALL IN September 2026" video.
 
 ---
 
+## FEATURE 7: CHANNEL-TO-CREATOR ATTRIBUTION FIX ✅ FIXED Sep 5 session
+**The bug report:** as soon as the Sep 4 Netflix fix was confirmed live, we re-asked the exact
+original question ("Is there a video from Jeremy within the last week where he mentions his
+projections for Netflix") to live-test it. Good news: the retrieval bug WAS fixed - the app no
+longer said "no mention found," it actually surfaced multiple real, dated Financial Education
+excerpts with specific Netflix numbers ($134-231 price target by 2030). But the answer itself
+said those excerpts were **"not Jeremy's channel"** - flatly wrong, since Financial Education is
+Jeremy's own main channel (see CHANNELS section above). This caused the app to undersell real,
+verified Jeremy content as not counting toward the answer.
+
+**Root cause:** this is a completely different class of bug from FEATURE 6 (retrieval) - this
+one is in the CONTEXT/PROMPT layer that hands retrieved chunks to Groq. In `ask_jeremy()`, the
+context string built for every excerpt only ever included the raw Neon `channel` value straight
+from the database (e.g. `[Financial Education | 2026-09-01 | ...]`). Nothing in that string, and
+nothing in the system prompt, ever told Groq that "Financial Education" and "1000xstocks" are
+channels Jeremy Lefebvre personally runs. The only place the name "Jeremy Lefebvre" appeared at
+all was the "Jeremy Lefebvre Makes Money" channel's own name. So when Groq saw an excerpt tagged
+just "Financial Education" with no other signal, it reasonably (but wrongly) inferred that a
+channel not literally named "Jeremy Lefebvre ___" must belong to a different creator - especially
+since the system prompt described Eric Cuka's content living on its own separate channel, which
+primed the model to think "different channel name = different creator."
+
+**The fix (`app.py`, `ask_jeremy()`):**
+- Added a new `CHANNEL_CREATOR` dict mapping every Neon `channel` value to the real creator's
+  name: `'Financial Education'`, `'1000xstocks'`, and `'Jeremy Lefebvre Makes Money'` all map to
+  `'Jeremy Lefebvre'`; `'Eric Cuka'` maps to itself.
+- Every excerpt's tag now includes BOTH fields explicitly: `[Creator: Jeremy Lefebvre | Channel:
+  Financial Education | 2026-09-01 | ...]` instead of just `[Financial Education | ...]` - so the
+  model doesn't have to infer anything, it's told directly.
+- Rewrote the system prompt to spell out the mapping in plain language: "Jeremy Lefebvre
+  personally runs THREE channels/properties that all count as his own words when the speaker is
+  verified: 'Financial Education' (his main channel), '1000xstocks' (his stock-analysis
+  site/channel), and 'Jeremy Lefebvre Makes Money' (his reaction channel)... Eric Cuka's content
+  comes from the 'Eric Cuka' channel." Also explicitly instructed Groq to "always use the
+  Creator field to decide whose opinion this is, never guess from the channel name alone."
+- No retrieval logic changed at all - this is purely a labeling/prompt fix layered on top of
+  Sep 3-4's Feature 6 retrieval fixes, which are unaffected.
+
+**Why this matters beyond just Netflix:** this same mislabeling could have been silently
+happening on ANY answer that cited Financial Education or 1000xstocks content without also
+citing a "Jeremy Lefebvre Makes Money" clip in the same answer - worth being a little suspicious
+of any past answer that seemed to say "Jeremy hasn't discussed X" when Financial
+Education/1000xstocks content on X actually existed in the corpus. Not chased retroactively
+this session (would mean re-running old test questions), but worth keeping in mind.
+
+**Deploy note:** written to project docs and pushed directly to the user's computer via
+`device_commit_files` (same successful path as Sep 4). **Not yet live-tested** at the time this
+plan was updated - next session (or as soon as the user pushes and redeploys) should re-ask the
+Netflix question again and confirm Groq now correctly attributes Financial Education excerpts to
+Jeremy Lefebvre instead of calling them "not Jeremy's channel."
+
+---
+
 ## 💡 FUTURE FEATURES
 - WhisperX speaker diarization for reaction channel.
 - Conflict detection (flag when a creator changed their mind on a stock).
@@ -570,6 +634,24 @@ original question now surfaces the "4 Stocks to Go ALL IN September 2026" video.
 - Decodo: ✅ on Pay As You Go
 
 ---
+
+## STATUS / WHERE WE LEFT OFF (Sep 5 session)
+- Confirmed the Sep 4 Netflix fix (`TOPIC_TAIL_PATTERN` widened to catch "for X"/"regarding X")
+  IS live and DID fix the retrieval bug - live-tested the exact original Netflix question and
+  the app now surfaces real, dated Financial Education excerpts with specific numbers instead
+  of a blanket "no mention found."
+- That same live test surfaced a NEW bug: Groq's answer incorrectly said those Financial
+  Education excerpts were "not Jeremy's channel." Diagnosed as a context/prompt-layer bug, not
+  a retrieval bug - the context sent to Groq never explicitly mapped channel names to real
+  creators, so the model guessed wrong. See FEATURE 7 (new section) for the full
+  investigation and fix (`CHANNEL_CREATOR` mapping + rewritten system prompt).
+- Fixed and pushed directly to the user's computer via `device_commit_files` (this path
+  continues to work reliably as of this session). Updated this plan (added FEATURE 7,
+  extended the START HERE banner, this STATUS/SESSION LOG entry) and the project's saved
+  `app.py` doc.
+- **NEXT ACTION:** once the user pushes/redeploys, live-test the Netflix question again (or a
+  similar one) to confirm Groq now correctly attributes Financial Education/1000xstocks
+  content to Jeremy Lefebvre by name instead of calling it "not Jeremy's channel."
 
 ## STATUS / WHERE WE LEFT OFF (Sep 4 session)
 - User reported a third variant of the Feature 6 bug class: a question about Jeremy's Netflix
@@ -744,3 +826,21 @@ original question now surfaces the "4 Stocks to Go ALL IN September 2026" video.
   warning near the top, extended FEATURE 6, added this STATUS/SESSION LOG entry) and the
   project's saved `app.py` doc. User will deploy via `git add`/`git commit`/`git push` from VS
   Code themselves — not yet live-tested against the actual Netflix question.
+- **Sep 5 (this session):** User ran the full git sync sequence from the Sep 4 session
+  (`git fetch origin`, `git reset --hard origin/main`, confirmed clean via `git status` -
+  local `app.py` and `PROJECT_PLAN.md` now match GitHub exactly, only pre-existing unrelated
+  scratch files remain untracked). Live-tested the Netflix question via the built-in browser:
+  confirmed the Sep 4 fix DID work at the retrieval level (real Financial Education content
+  with specific Netflix numbers now surfaces, no more "no mention found"), but caught a new
+  bug live - Groq's answer said that content was "not Jeremy's channel," which is wrong.
+  Investigated by reading `app.py`'s `ask_jeremy()` function directly: found the context string
+  sent to Groq only ever included the raw `channel` value from Neon, with nothing anywhere
+  telling the model that Financial Education and 1000xstocks are channels Jeremy Lefebvre
+  personally runs - so the model reasonably guessed wrong from the channel name alone. Fixed by
+  adding a `CHANNEL_CREATOR` mapping dict, tagging every excerpt with both a `Creator` and
+  `Channel` field, and rewriting the system prompt to spell out which channels belong to which
+  creator explicitly (see FEATURE 7, new section). Verified the fix compiles with `py_compile`,
+  wrote it to the project's saved `app.py` doc, and pushed it directly to the user's computer
+  via `device_commit_files` (continues to work reliably). Updated this plan with the new
+  FEATURE 7 section and this STATUS/SESSION LOG entry. Not yet live-tested after this fix -
+  next step once the user pushes/redeploys is to re-ask the Netflix question one more time.

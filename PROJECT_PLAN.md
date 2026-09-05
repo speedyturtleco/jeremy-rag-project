@@ -146,7 +146,13 @@ run `git reset --hard` again.**
 > something distinctive from the fix (a new function name, a comment, a changed line) BEFORE
 > telling the user to `git add`/`git commit`/`git push`.** A "written" success from the tool is
 > not proof the content actually changed on disk - verify it independently every time, the same
-> way large-paste browser edits already get verified in this project.
+> way large-paste browser edits already get verified in this project. **Update, later same
+> session: this happened 3 separate times in ONE session** (twice on `PROJECT_PLAN.md`, once on
+> `app.py`) - not a one-off fluke. Every time, a `force: true` retry on the very next attempt
+> succeeded. Standing pattern: after every `device_commit_files` write, immediately
+> `device_stage_files` that same path back and md5sum/diff it against the source - if it doesn't
+> match, retry once with `force: true` and verify again, rather than assuming the first
+> "written" response was real.
 
 ---
 
@@ -652,12 +658,23 @@ the raw question alone correctly returns `"wynn"`; extracting from the context-s
 - No change to the semantic search step, to Modes 1-4, or to any other Feature 6/7 logic -
   purely fixes which string the keyword-extraction regexes see.
 
-**Deploy note:** written to project docs and pushed to the user's computer via
-`device_commit_files`, this time confirmed pushed to GitHub via the user's own `git add` /
-`git commit` / `git push` (not yet done at the time this entry was written - see NEXT ACTION).
-**Not yet live-tested after this fix** - next step is to re-ask the Wynn follow-up question
-again (ideally both as a fresh first question AND as a same-session follow-up after another
-question, to make sure both paths work) once the user has pushed and Streamlit has redeployed.
+**Deploy note:** written to project docs and pushed to GitHub via the user's own `git add` /
+`git commit` / `git push` (commit `c84d17a`). **Live-tested and confirmed working, both
+scenarios:**
+1. Fresh Wynn question with no prior conversation - correctly found and cited a July 5 2026
+   Jeremy Lefebvre (1000xstocks) Wynn Resorts projection with a working timestamp link.
+2. The Wynn question asked as a same-session follow-up immediately after an AMD question (the
+   exact scenario that originally exposed the bug) - correctly found and cited the verified
+   June 1 2026 Wynn Resorts mention instead of a false "no mention found."
+Both confirmed fixed.
+
+**Side note during testing (not a code bug):** hit a transient `groq.APIStatusError` a few times
+while rapid-firing several test questions back-to-back within about a minute. Resolved on its
+own after roughly a 60-second gap with zero code changes - almost certainly Groq's free-tier
+rate limit, not a retrieval or prompt bug. Worth remembering if a user ever reports "the app
+just showed a groq error" after asking several questions in quick succession - that's likely
+rate limiting, not a regression, and should self-resolve. Not worth engineering around unless it
+starts happening under normal (non-rapid-testing) usage patterns.
 
 ---
 
@@ -778,9 +795,16 @@ question, to make sure both paths work) once the user has pushed and Streamlit h
   `device_commit_files` write actually landed by staging the file back and checking for the
   fix's own content, never trust the tool's "written" success alone.** User then successfully
   committed (`c84d17a`) and pushed FEATURE 8's fix to GitHub.
-- **NEXT ACTION:** live-test the Wynn follow-up question again - both as a fresh standalone
-  question AND as a same-session follow-up after another question, since that's specifically
-  what exposed the bug.
+- **Live-tested FEATURE 8's fix after the push - confirmed working, both scenarios:** a fresh
+  standalone Wynn question, and the Wynn question as a same-session follow-up right after an
+  AMD question (the exact scenario that exposed the bug). Both correctly found and cited real,
+  verified Wynn Resorts content instead of a false "no mention found." Hit a transient
+  `groq.APIStatusError` a few times mid-testing from asking questions too rapidly back-to-back
+  (Groq free-tier rate limiting, not a code bug) - resolved itself after about a minute's gap.
+- **NEXT ACTION:** none urgent. All three bugs found this session (Feature 8's keyword/context
+  interaction, Feature 7's channel mislabeling, plus confirming Feature 6's Sep 4 Netflix fix)
+  are now fixed, deployed, and live-tested working. Good time to just use the app normally for
+  a while, or pick something from 💡 FUTURE FEATURES.
 
 ## STATUS / WHERE WE LEFT OFF (Sep 4 session)
 - User reported a third variant of the Feature 6 bug class: a question about Jeremy's Netflix

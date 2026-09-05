@@ -3,36 +3,49 @@
 ---
 ## 🚦 START HERE — NEXT SESSION FIRST ACTION (updated Sep 5 session)
 
-**Sep 4's Netflix fix (widened `TOPIC_TAIL_PATTERN`) is confirmed live and DID work at the
-retrieval level - re-asking the Netflix question live-tested Sep 5 no longer says "no mention
-found," it actually surfaces real Financial Education excerpts with specific Netflix numbers.
-But live-testing surfaced a NEW, separate bug: Groq's answer labeled those Financial Education
-excerpts "not Jeremy's channel," which is flatly wrong (Financial Education is Jeremy's own
-main channel). Root cause and fix - a new FEATURE 7 - below. Everything from Sep 2-4 (Feature 1
-Modes 2-4, Feature 2, Feature 4, all three Feature 6 fixes) is still done and live.**
+**Two bugs found and fixed this session, both confirmed working live except the very last one:**
+FEATURE 7 (Groq mislabeling Jeremy's own channels as "not Jeremy's") is fixed AND live-tested
+working. FEATURE 8 (conversation-memory context stuffing silently breaking keyword extraction
+on follow-up questions) is fixed but NOT YET live-tested - see FEATURE 8 below, that's the
+first thing to check next session. Everything from Sep 2-4 (Feature 1 Modes 2-4, Feature 2,
+Feature 4, all three Feature 6 fixes) is still done and live.**
 
-1. ✅ **BUG FOUND & FIXED Sep 5: Groq mislabeled Jeremy's own channels as "not Jeremy's
+**⚠️ Also: a process mistake happened and was caught/fixed this session - see the new callout
+right after the "HOW TO WORK WITH ME" section below. Read it before ever telling the user to
+run `git reset --hard` again.**
+
+1. ✅ **BUG FOUND & FIXED Sep 5: keyword extraction silently broken by conversation-memory
+   context stuffing** — a same-session follow-up question ("...projections for wynn?" asked
+   right after a Netflix question) got a false "no mention found" even though the exact "for X"
+   phrasing was already supposed to be fixed (Sep 4) and a verified Wynn mention was already
+   confirmed to exist in the corpus (Sep 3). Root cause: totally different from Features 6/7 -
+   `build_search_query()` appends the PRIOR question+answer after the new question for semantic
+   search purposes, but `extract_stock_keyword()`'s end-of-string anchor was reading that same
+   appended string, so it silently extracted nothing once older conversation text came after the
+   real question. Fixed by extracting keywords from the raw current question only. Full details
+   in the new FEATURE 8 section below. **Not yet live-tested after this fix** - do this first
+   next session.
+2. ✅ **BUG FOUND & FIXED Sep 5: Groq mislabeled Jeremy's own channels as "not Jeremy's
    channel"** — live-testing the Sep 4 Netflix fix showed real progress (the app now finds and
    quotes real, dated Netflix content instead of a blanket "no mention found") but revealed a
    new bug: Groq's answer said Financial Education excerpts were "not Jeremy's channel." Root
    cause: the context sent to Groq only ever included the raw Neon `channel` value (e.g.
    "Financial Education"), never an explicit mapping to the real creator - so the model had no
    way to know Jeremy personally runs that channel, and guessed wrong. Fixed by adding an
-   explicit `CHANNEL_CREATOR` mapping to every excerpt tag and to the system prompt. Full
-   details in the new FEATURE 7 section below. **Not yet live-tested after this fix** - worth
-   confirming next session.
-2. ✅ **BUG FOUND & FIXED Sep 4: "for X" / "regarding X" phrasing missed by the keyword
+   explicit `CHANNEL_CREATOR` mapping to every excerpt tag and to the system prompt. **Confirmed
+   fixed via live test** - full details in FEATURE 7 section below.
+3. ✅ **BUG FOUND & FIXED Sep 4: "for X" / "regarding X" phrasing missed by the keyword
    safety net** — user reported that a question about Jeremy's Netflix projections (from the
    video "4 Stocks to Go ALL IN September 2026") came back with a false "no mention found."
    Same root cause family as the Wynn/Celsius bugs: `TOPIC_TAIL_PATTERN` only recognized "on X"
    / "about X" at the end of a question, not "for X" - so "his projections **for** Netflix"
    never triggered the literal keyword search. Fixed by widening the preposition list. Full
    details in FEATURE 6's third update below.
-3. ✅ **IMPORTANT PROCESS FIX Sep 4: local `app.py` was stale, now back in sync** — see the new
+4. ✅ **IMPORTANT PROCESS FIX Sep 4: local `app.py` was stale, now back in sync** — see the new
    note below. Going forward, confirm local vs. live are in sync at the start of any session
    that touches `app.py`, since deploys have been happening straight to GitHub without always
    updating the local copy.
-4. **This session's deploy path was different:** for the first time, `device_commit_files`
+5. **This session's deploy path was different:** for the first time, `device_commit_files`
    successfully wrote directly to the user's local `app.py` (previous sessions logged this as
    unavailable/refused). The user will `git add` / `git commit` / `git push` from VS Code
    themselves to actually deploy - worth trying this path again before assuming the GitHub
@@ -110,6 +123,30 @@ Modes 2-4, Feature 2, Feature 4, all three Feature 6 fixes) is still done and li
 > push` can silently roll back everything shipped through an alternate deploy path. This
 > session fixed it by writing the current, project-doc-verified version to the local file
 > before applying the new fix, then syncing this project's own saved copy too.
+
+> **⚠️ NEVER `git reset --hard` OVER AN UNPUSHED FIX (added Sep 5):** on Sep 5, right after
+> writing a fix directly to the user's local `app.py`/`PROJECT_PLAN.md` via `device_commit_files`,
+> I told the user to run the standard `git fetch origin` + `git reset --hard origin/main` sync
+> routine - but that fix had only been written LOCALLY, never actually pushed to GitHub yet. The
+> reset silently discarded it (rolled back to the last real GitHub commit). **A file being on
+> the user's disk via `device_commit_files` is NOT the same as that file being safe to `git
+> reset --hard` over.** Before ever suggesting a hard reset (or anything else that makes the
+> working tree exactly match a remote/commit), confirm the fix in question is EITHER already on
+> GitHub (check the commit hash / GitHub UI) OR about to be committed+pushed in the very next
+> step, e.g. via `git add` / `git commit` / `git push` run by the user themselves. When in doubt,
+> ask for `git status` first and read it before recommending any command that overwrites the
+> working tree.
+
+> **⚠️ VERIFY `device_commit_files` WRITES ACTUALLY LANDED (added Sep 5):** on Sep 5,
+> `device_commit_files` reported success writing a fix to the user's local `app.py`, but the
+> file on disk was silently unchanged (confirmed by staging it back and diffing/grepping for
+> the new code - it wasn't there). The user then correctly got a `git commit` that said
+> "nothing to commit" because there really was nothing new on disk. **Going forward: after ANY
+> `device_commit_files` write, re-`device_stage_files` that same file back and grep/diff for
+> something distinctive from the fix (a new function name, a comment, a changed line) BEFORE
+> telling the user to `git add`/`git commit`/`git push`.** A "written" success from the tool is
+> not proof the content actually changed on disk - verify it independently every time, the same
+> way large-paste browser edits already get verified in this project.
 
 ---
 
@@ -550,10 +587,77 @@ Education/1000xstocks content on X actually existed in the corpus. Not chased re
 this session (would mean re-running old test questions), but worth keeping in mind.
 
 **Deploy note:** written to project docs and pushed directly to the user's computer via
-`device_commit_files` (same successful path as Sep 4). **Not yet live-tested** at the time this
-plan was updated - next session (or as soon as the user pushes and redeploys) should re-ask the
-Netflix question again and confirm Groq now correctly attributes Financial Education excerpts to
-Jeremy Lefebvre instead of calling them "not Jeremy's channel."
+`device_commit_files` (same successful path as Sep 4). **Live-tested and confirmed working
+same session:** re-asked the Netflix question after the user pushed - Groq's answer correctly
+said "Jeremy Lefebvre has a recent video... where he spells out his price-target projections
+for Netflix," correctly cited the Financial Education video by name with real numbers and a
+working timestamp link, and the table's "Channel" column was clearly marked "(verified)"
+instead of "not Jeremy's channel." Confirmed fixed.
+
+**⚠️ Process note (Sep 5):** right after this fix was pushed and live-tested, the user was told
+to run `git fetch origin` + `git reset --hard origin/main` (the standard post-session-Sep-4
+sync routine) - but the Feature 7 fix had ONLY been written to the user's local disk via
+`device_commit_files`, never actually pushed to GitHub yet. The reset therefore rolled the
+local files back to the last GitHub commit (pre-Feature-7), silently discarding the fix that
+had just been written locally. Caught immediately from the `git reset --hard` output (`HEAD is
+now at 2ae5149`, the *previous* commit, not a new one). Recovered by re-writing the fixed files
+to disk via `device_commit_files` again and having the user `git add` / `git commit` / `git
+push` them directly (commit `ce5b201`) rather than routing through the browser/GitHub-web-editor
+detour again. **Lesson for future sessions: NEVER tell the user to run `git reset --hard
+origin/main` (or anything that resets working-tree state to match GitHub) until every locally
+-written fix from that session has actually been pushed to GitHub first** - "written to disk
+via device_commit_files" is not the same as "safe to reset over." Verify with `git status`
+showing the fix as a pending local change (or confirm the GitHub commit hash) before ever
+suggesting a hard reset.
+
+---
+
+## FEATURE 8: KEYWORD EXTRACTION BROKEN BY CONVERSATION-MEMORY CONTEXT STUFFING ✅ FIXED Sep 5 session
+**The bug report:** immediately after confirming FEATURE 7's fix worked (Netflix question),
+asked a follow-up in the SAME session: "When was the most recent time Jeremy has mentioned
+projections for wynn?" This should have worked - it's the same "for X" phrasing already fixed
+in FEATURE 6's third update, and a real, verified Wynn mention was already confirmed to exist
+in the corpus back in the original Wynn bug investigation. Instead, Groq's answer said: "The
+transcript excerpts you provided do not contain any mention of Wynn Resorts (Wynn)... All of the
+cited clips are focused on Netflix," and explicitly listed its sources as being about Netflix,
+2018-2026 - meaning the context handed to Groq was never about Wynn at all.
+
+**Root cause - a genuinely new bug class, not a repeat of Feature 6/7:** `build_search_query()`
+(the conversation-memory function) appends the PRIOR question+answer AFTER the current question
+before the combined string is used for semantic search - e.g. `"{current question}\n\nContext
+from the previous question and answer: {prior Q&A text}"`. This is intentional and correct for
+the embedding step (it's how follow-up questions get conversational context). But
+`search_transcripts()` was ALSO using that same context-stuffed string for
+`extract_stock_keyword()` - and `TOPIC_TAIL_PATTERN` (the regex that catches "for X"/"on X"/etc)
+anchors to the literal END of the string (`$`). Once prior conversation text got appended after
+the real question, the end of the string was now the tail of the OLD answer (which happened to
+be about Netflix), not the new question. So `extract_stock_keyword()` silently returned `None`,
+the whole hybrid keyword/fuzzy safety net never engaged, and pure semantic search ran on a query
+that was skewed toward the previous turn's Netflix content by the appended context - hence an
+all-Netflix result set for a Wynn question. Confirmed by direct Python testing: extracting from
+the raw question alone correctly returns `"wynn"`; extracting from the context-stuffed
+`search_query` (exactly what the code was passing in) returns `None`.
+
+**The fix (`app.py`, `search_transcripts()`):**
+- Added a `raw_question` parameter to `search_transcripts(query, limit=10, raw_question=None)` -
+  `query` stays the context-stuffed string used for the semantic embedding (unchanged, still
+  benefits from conversation memory), but `extract_stock_keyword()` and
+  `wants_most_recent_mention()` (used for the recency-sort decision too, same anchoring risk)
+  now always run against `raw_question` when it's provided - i.e. the actual, un-appended
+  question the user just typed.
+- Updated the one call site in the main chat handler to pass `raw_question=prompt` (the raw
+  user input, before `build_search_query()` ever touches it).
+- Falls back to using `query` itself if `raw_question` isn't passed (keeps the function
+  backward-compatible / harmless for any future caller that doesn't need this).
+- No change to the semantic search step, to Modes 1-4, or to any other Feature 6/7 logic -
+  purely fixes which string the keyword-extraction regexes see.
+
+**Deploy note:** written to project docs and pushed to the user's computer via
+`device_commit_files`, this time confirmed pushed to GitHub via the user's own `git add` /
+`git commit` / `git push` (not yet done at the time this entry was written - see NEXT ACTION).
+**Not yet live-tested after this fix** - next step is to re-ask the Wynn follow-up question
+again (ideally both as a fresh first question AND as a same-session follow-up after another
+question, to make sure both paths work) once the user has pushed and Streamlit has redeployed.
 
 ---
 
@@ -645,13 +749,38 @@ Jeremy Lefebvre instead of calling them "not Jeremy's channel."
   a retrieval bug - the context sent to Groq never explicitly mapped channel names to real
   creators, so the model guessed wrong. See FEATURE 7 (new section) for the full
   investigation and fix (`CHANNEL_CREATOR` mapping + rewritten system prompt).
-- Fixed and pushed directly to the user's computer via `device_commit_files` (this path
-  continues to work reliably as of this session). Updated this plan (added FEATURE 7,
-  extended the START HERE banner, this STATUS/SESSION LOG entry) and the project's saved
-  `app.py` doc.
-- **NEXT ACTION:** once the user pushes/redeploys, live-test the Netflix question again (or a
-  similar one) to confirm Groq now correctly attributes Financial Education/1000xstocks
-  content to Jeremy Lefebvre by name instead of calling it "not Jeremy's channel."
+- Fixed and pushed directly to the user's computer via `device_commit_files`. **Made a process
+  mistake right after this:** told the user to run `git reset --hard origin/main` before the
+  fix had actually been pushed to GitHub, which silently discarded it. Caught it from the reset
+  output, re-wrote the fix to disk, and had the user push it directly via `git add`/`git
+  commit`/`git push` (commit `ce5b201`) instead of routing through the browser again. Added a
+  new standing warning about this near the top of the plan - **never suggest `git reset --hard`
+  until confirming the fix in question is already on GitHub or about to be pushed in the very
+  next step.**
+- **Live-tested FEATURE 7's fix after the push - confirmed working:** re-asked the Netflix
+  question; Groq now correctly says "Jeremy Lefebvre has a recent video... Financial Education"
+  and marks the channel "(verified)" instead of "not Jeremy's channel."
+- Immediately asked a follow-up in the same session ("most recent time Jeremy has mentioned
+  projections for wynn") to keep testing - this surfaced a FOURTH, different bug (FEATURE 8):
+  conversation-memory's context-stuffing (`build_search_query()` appending the prior Q&A after
+  the current question) broke `extract_stock_keyword()`'s end-of-string anchor, so the keyword
+  safety net silently didn't engage on follow-up questions, and semantic search returned an
+  all-Netflix context for a Wynn question. Confirmed root cause via direct Python testing
+  (extracting from the raw question alone works; extracting from the context-stuffed string
+  doesn't). Fixed by extracting keywords from the raw current question, always, regardless of
+  what gets appended for the embedding step. See FEATURE 8 (new section) for full details.
+- FEATURE 8's fix was written to project docs and to the user's computer via
+  `device_commit_files` - but the FIRST write silently didn't land (tool reported success, file
+  on disk was actually unchanged), caught only because the user's `git commit` said "nothing to
+  commit" and prompted a check. Verified via `device_stage_files` + diff/grep, re-wrote it with
+  `force: true`, and verified AGAIN before telling the user to commit - this time it genuinely
+  matched. Added a new standing warning about this near the top of the plan - **always verify a
+  `device_commit_files` write actually landed by staging the file back and checking for the
+  fix's own content, never trust the tool's "written" success alone.** User then successfully
+  committed (`c84d17a`) and pushed FEATURE 8's fix to GitHub.
+- **NEXT ACTION:** live-test the Wynn follow-up question again - both as a fresh standalone
+  question AND as a same-session follow-up after another question, since that's specifically
+  what exposed the bug.
 
 ## STATUS / WHERE WE LEFT OFF (Sep 4 session)
 - User reported a third variant of the Feature 6 bug class: a question about Jeremy's Netflix

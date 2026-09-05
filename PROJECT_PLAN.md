@@ -1,19 +1,35 @@
 # Ask Jeremy — Master Project Plan & Memory File
 
 ---
-## 🚦 START HERE — NEXT SESSION FIRST ACTION (updated Sep 5 session)
+## 🚦 START HERE — NEXT SESSION FIRST ACTION (updated Sep 5 session, later same day)
 
-**Two bugs found and fixed this session, both confirmed working live except the very last one:**
-FEATURE 7 (Groq mislabeling Jeremy's own channels as "not Jeremy's") is fixed AND live-tested
+**THREE bugs found and fixed this session. Two confirmed live-tested working; the newest one
+(Feature 9) is fixed and pushed to the user's computer but NOT YET pushed to GitHub or
+live-tested - that's the first thing to check next session.**
+FEATURE 7 (Groq mislabeling Jeremy's own channels as "not Jeremy's") - fixed AND live-tested
 working. FEATURE 8 (conversation-memory context stuffing silently breaking keyword extraction
-on follow-up questions) is fixed but NOT YET live-tested - see FEATURE 8 below, that's the
-first thing to check next session. Everything from Sep 2-4 (Feature 1 Modes 2-4, Feature 2,
+on follow-up questions) - fixed AND live-tested working (see FEATURE 8 below). FEATURE 9
+(wrong/misleading video timestamps from a non-unique text match) - fixed and verified written to
+the user's local `app.py`, but the user still needs to `git add`/`git commit`/`git push` it, and
+it has NOT been live-tested yet. Everything from Sep 2-4 (Feature 1 Modes 2-4, Feature 2,
 Feature 4, all three Feature 6 fixes) is still done and live.**
 
-**⚠️ Also: a process mistake happened and was caught/fixed this session - see the new callout
-right after the "HOW TO WORK WITH ME" section below. Read it before ever telling the user to
-run `git reset --hard` again.**
+**⚠️ Also: a process mistake happened and was caught/fixed earlier this session - see the new
+callout right after the "HOW TO WORK WITH ME" section below. Read it before ever telling the
+user to run `git reset --hard` again.**
 
+0. ✅ **BUG FOUND & FIXED Sep 5 (later): wrong video timestamp shown for a cited excerpt** — user
+   asked "when is the most recent time jeremy mentions amazon projections?" and got an answer
+   citing a real Nov 2025 Financial Education video, but the "jump to it" timestamp (≈2:45)
+   pointed at the wrong part of the video, not the actual Amazon-trillion-dollar segment being
+   quoted. Root cause and fix are in the new FEATURE 9 section below - short version: the
+   timestamp-matching code's 60-character fallback snippet could match more than one place in a
+   long video's transcript, and it was silently taking the FIRST match instead of checking
+   whether the match was actually unique. Fixed by requiring uniqueness before trusting a match,
+   returning no timestamp (falls back to the plain video link) rather than guessing wrong.
+   **Verified written to the user's local `app.py` (staged back and diffed to confirm) - user
+   still needs to push it to GitHub and it has NOT been live-tested yet.** Do this first next
+   session.
 1. ✅ **BUG FOUND & FIXED Sep 5: keyword extraction silently broken by conversation-memory
    context stuffing** — a same-session follow-up question ("...projections for wynn?" asked
    right after a Netflix question) got a false "no mention found" even though the exact "for X"
@@ -675,6 +691,58 @@ rate limit, not a retrieval or prompt bug. Worth remembering if a user ever repo
 just showed a groq error" after asking several questions in quick succession - that's likely
 rate limiting, not a regression, and should self-resolve. Not worth engineering around unless it
 starts happening under normal (non-rapid-testing) usage patterns.
+
+---
+
+## FEATURE 9: NON-UNIQUE TIMESTAMP MATCH COULD POINT AT THE WRONG MOMENT ✅ FIXED Sep 5 session (later)
+**The bug report:** asked the live app "when is the most recent time jeremy mentions amazon
+projections?" It correctly cited a real, dated (2025-11-24) Financial Education video and quoted
+Jeremy's actual Amazon "trillion-dollar-plus revenue company" projection - but the "jump to it"
+timestamp shown for that citation (≈2:45) did not point at that segment of the video. Retrieval
+and the answer content were both correct; only the timestamp was wrong.
+
+**Root cause:** in `find_timestamp_for_chunk()` (Feature 2, built Sep 2, unchanged until now),
+the function tries to locate a cited chunk's text inside the video's full timed-caption text by
+taking the first 200 characters of the chunk and searching for it with `full_text.find()`. If
+that fails, it FALLS BACK to just the first 60 characters and searches again - but that fallback
+never checked whether the 60-character snippet was actually unique in the transcript. On a
+video that runs any length of time, a short, generic-sounding 60-character snippet (numbers,
+common phrasing, etc.) can easily appear more than once. `full_text.find()` always returns the
+FIRST occurrence it finds, so if the real, later segment's snippet happened to also match some
+earlier, unrelated part of the video, the function confidently returned the EARLIER (wrong)
+timestamp instead of admitting it wasn't sure. This directly contradicts the function's own
+docstring promise ("Returns None ... if it can't find a confident match") - the promise just
+wasn't actually enforced for the 60-char fallback case.
+
+**The fix (`app.py`, `find_timestamp_for_chunk()`):**
+- Rewrote the matching loop to try snippet lengths 200 then 60 (same as before), but for EACH
+  length, only accept the match if it occurs EXACTLY ONCE in the reconstructed full transcript
+  text (checked via a second `full_text.find(snippet, first + 1)` call - if that returns
+  anything other than -1, the match is ambiguous and is rejected, not used).
+- If no snippet length produces a unique match, the function now returns `None` just like it
+  already did for the "no match at all" case - callers already treat `None` as "no timestamp
+  available" and silently fall back to the plain video URL (`add_timestamp_links()`'s existing
+  behavior, unchanged), so a user still gets a working link, just without the `&t=` jump-to-
+  moment precision, rather than a link that jumps to the wrong place.
+- No change to `get_timed_segments()`, `add_timestamp_links()`, the caching table, or anything
+  else in Feature 2 - purely tightens the confidence check inside the string-matching step.
+
+**Why this wasn't caught back on Sep 2:** the original live-test (Tesla-in-2021 question) happened
+to hit videos/snippets where the first match was also the only match, so the missing uniqueness
+check never surfaced. This is exactly the kind of thing that can silently misfire on some videos
+and not others depending on how repetitive their phrasing is - worth remembering if a future
+timestamp looks "close but not quite right" again.
+
+**Deploy status:** fix written and `py_compile`-verified in the cloud sandbox, then written to
+this project's saved `app.py` copy, then pushed to the user's local `app.py` via
+`device_commit_files` - **verified landed correctly** by staging the file back and confirming
+`md5sum` matched the source (first `device_commit_files` call silently didn't take effect despite
+reporting success, exactly the known pattern from earlier this session - retried once with
+`force: true`, then verified again and it matched). **Still needed before this is live:** the
+user runs `git add app.py` / `git commit` / `git push` themselves, then this should be
+live-tested by re-asking the Amazon projections question and confirming the "jump to it" link
+now either points at the right moment or omits the timestamp entirely (both are correct outcomes
+- pointing at the WRONG moment is the only failure mode this fix rules out).
 
 ---
 

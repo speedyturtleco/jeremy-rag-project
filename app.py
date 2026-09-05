@@ -554,16 +554,33 @@ def find_timestamp_for_chunk(chunk_text, segments):
     """Best-effort: reconstructs the same flat caption text embed_and_upload.py chunked from
     (' '.join of each caption line), finds roughly where this chunk's text starts in that
     string, then walks the segments to find which caption's start time that offset falls in.
-    Returns None (rather than guessing) if it can't find a confident match."""
+    Returns None (rather than guessing) if it can't find a confident, UNIQUE match.
+
+    Why uniqueness matters: on a long video, a short snippet (especially the 60-char
+    fallback) can appear more than once (Jeremy re-using the same phrasing, numbers, etc.).
+    If we just take full_text.find()'s first hit, we can silently point at an earlier,
+    unrelated segment instead of the one this chunk actually came from. So each candidate
+    snippet length is only accepted if it matches exactly once in the full transcript."""
     if not segments:
         return None
     full_text = ' '.join(seg['text'] for seg in segments)
-    snippet = chunk_text.strip()[:200]
-    idx = full_text.find(snippet)
-    if idx == -1:
-        snippet = chunk_text.strip()[:60]
-        idx = full_text.find(snippet)
-    if idx == -1:
+    stripped = chunk_text.strip()
+    idx = None
+    for length in (200, 60):
+        snippet = stripped[:length]
+        if not snippet:
+            continue
+        first = full_text.find(snippet)
+        if first == -1:
+            continue
+        second = full_text.find(snippet, first + 1)
+        if second != -1:
+            # Matches more than once - not a confident match at this snippet length,
+            # don't guess which occurrence is the right one.
+            continue
+        idx = first
+        break
+    if idx is None:
         return None
     running = 0
     for seg in segments:

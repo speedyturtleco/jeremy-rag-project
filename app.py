@@ -613,6 +613,16 @@ def add_timestamp_links(chunks):
 # ===================================================================================================
 
 
+def escape_dollar_signs(text):
+    """Streamlit's markdown renderer treats a pair of '$' as LaTeX math delimiters (KaTeX).
+    Groq's answers are full of literal dollar amounts (e.g. '$889B ... net income of $58B'),
+    and any two '$' signs anywhere in the same answer get treated as opening/closing a math
+    block, garbling everything between them (letters get spaced out, ** turns into literal
+    asterisks, etc). Escaping every literal '$' as '\\$' tells the renderer to show it as a
+    plain character instead of starting/ending a math block."""
+    return re.sub(r'(?<!\\)\$', r'\\$', text)
+
+
 def ask_jeremy(question, context_chunks):
     context = '\n\n'.join([
         f"[Creator: {CHANNEL_CREATOR.get(c['channel'], c['channel'])} | Channel: {c['channel']} | "
@@ -635,7 +645,7 @@ def ask_jeremy(question, context_chunks):
         ],
         max_tokens=2500
     )
-    return response.choices[0].message.content
+    return escape_dollar_signs(response.choices[0].message.content)
 
 st.set_page_config(
     page_title="Ask Jeremy",

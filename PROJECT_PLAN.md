@@ -10,11 +10,10 @@ questions), and FEATURE 9 (wrong/misleading video timestamps from a non-unique t
 all fixed, on GitHub, and confirmed live. Everything from Sep 2-4 (Feature 1 Modes 2-4, Feature 2,
 Feature 4, all three Feature 6 fixes) is still done and live.
 
-**One small, unaddressed, low-priority item spotted during Feature 9's live-test:** dollar
-amounts occasionally render garbled (e.g. "$889B" showing as broken LaTeX-looking text) - likely
-Streamlit misinterpreting `$` as markdown math syntax. See the note at the end of the FEATURE 9
-section below. Not urgent, not yet fixed - good candidate for a future session if it keeps
-showing up.
+**Also fixed this session, right after Feature 9: FEATURE 10, the garbled dollar-amount
+rendering bug** spotted during Feature 9's live-test. Written and verified on the user's local
+`app.py` - **still needs `git add`/`git commit`/`git push` and a live-test**, see FEATURE 10
+below.
 
 **⚠️ Also: a process mistake happened and was caught/fixed earlier this session - see the new
 callout right after the "HOW TO WORK WITH ME" section below. Read it before ever telling the
@@ -763,6 +762,48 @@ timestamps. Not fixed this session (user only flagged the timestamp) - worth fix
 dollar amounts show up wrong, likely by having `ask_jeremy()`'s system prompt instruct Groq to
 avoid bare `$number` formatting (e.g. write "889 dollars" or escape it), or by escaping/sanitizing
 `$` in the answer text before it's rendered.
+
+---
+
+## FEATURE 10: GARBLED DOLLAR-AMOUNT RENDERING (LATEX MATH MISINTERPRETATION) ✅ FIXED Sep 5 session (later still)
+**The bug:** spotted during Feature 9's live-test - a dollar amount in an answer rendered as
+garbled text (`889 B∗∗,netincomeof∗∗58 B` instead of "$889B ... net income of $58B"). User
+confirmed this had been happening and asked to fix it.
+
+**Root cause:** Streamlit's markdown renderer treats a PAIR of `$` characters anywhere in the
+same message as LaTeX math delimiters (it uses KaTeX under the hood). Groq's answers are full of
+literal dollar amounts, so whenever an answer contained two or more `$` signs (extremely common -
+"$889B ... $58B" alone is two), everything between the first and second `$` got interpreted as a
+math expression instead of plain text: spaces get dropped, `**` (markdown bold) turns into literal
+asterisks, letters get spaced out weirdly. This is a display/rendering bug only - the actual answer
+content and numbers coming back from Groq were always correct, they just looked broken once
+Streamlit tried to render them as markdown.
+
+**The fix (`app.py`):**
+- Added `escape_dollar_signs(text)` - a small helper using `re.sub(r'(?<!\\)\$', r'\\$', text)`
+  to escape every literal `$` as `\$`, telling Streamlit's markdown/KaTeX renderer to display it
+  as a plain dollar sign instead of opening or closing a math block.
+- `ask_jeremy()` now runs its Groq response through `escape_dollar_signs()` before returning it,
+  so both the live answer render (`st.markdown(answer)`) and the chat-history replay
+  (`st.markdown(message['content'])`, since the escaped text is what gets stored in
+  `st.session_state.messages`) are fixed consistently - no separate fix needed at each render
+  call site.
+- Verified locally with the exact garbled example from the live test
+  ("$889B, net income of $58B, and a market-cap of $1.7-2.3T") - confirmed it now escapes to
+  "\$889B, net income of \$58B, and a market-cap of \$1.7-2.3T", which Streamlit will render as
+  plain readable text.
+- No retrieval, prompt, or timestamp logic touched - purely a post-processing step on the final
+  answer string, isolated to this one new function plus its one call site.
+
+**Deploy status:** written to this project's saved `app.py` copy, then pushed to the user's local
+`app.py` via `device_commit_files` - **verified landed correctly** by staging the file back and
+confirming `md5sum` matched the source (first `device_commit_files` call again silently didn't
+take effect despite reporting success - same known pattern as every other file push this session -
+retried once with `force: true`, then verified again and it matched). **Still needed before this
+is live:** user runs `git add app.py` / `git commit` / `git push`, then this should be live-tested
+by re-asking a question likely to include dollar amounts (the Amazon projections question used for
+Feature 9 is a good one, since it already surfaced this exact bug) and confirming dollar amounts
+now render as normal text instead of garbled math notation.
 
 ---
 

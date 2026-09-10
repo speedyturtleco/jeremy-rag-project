@@ -364,9 +364,40 @@ model = load_model()
 # preposition list to also catch "for" and "regarding" so a question like "his projections
 # for Netflix" (from the "4 Stocks to Go ALL IN September 2026" video) gets the same keyword
 # safety net as the "on X"/"about X" phrasings already did.
+#
+# Fourth bug found Sep 10: "How many shares of RH did Jeremy say he bought in one of his
+# recent videos" came back with "no RH mentions" even though the exact video (Sept 9 2026,
+# "Loading on RH - When to Add More to a Cyclical Stock") was already in Neon. Root cause:
+# short all-caps ticker symbols like "RH" don't carry much meaning for the embedding-based
+# semantic search to match against, so a 2-letter ticker mentioned only briefly can miss the
+# top-10 cutoff entirely - and neither existing keyword safety net caught it either, since the
+# question didn't use "RH stock" phrasing and didn't end in "...on/about/for RH". Added a
+# standalone ticker-symbol check below: any bare all-caps word 2-5 letters long (RH, AMD,
+# NFLX, etc.) anywhere in the question is treated as a likely ticker and given the same ILIKE
+# keyword safety net - unlike the topic-tail extraction above, this ISN'T gated to
+# recency-style questions, since a written-out ticker symbol is a much more unambiguous
+# signal than an arbitrary trailing word. A small blocklist filters out common all-caps
+# acronyms (CEO, IPO, ETF, etc.) that aren't stock tickers, to avoid dragging in irrelevant
+# ILIKE matches for those.
 STOCK_KEYWORD_PATTERN = re.compile(r'\b([A-Za-z][A-Za-z.\-]{1,15})\s+stock\b', re.IGNORECASE)
 TOPIC_TAIL_PATTERN = re.compile(r'\b(?:on|about|for|regarding)\s+([A-Za-z][A-Za-z.\-]{1,20})\b\s*[?.!]*\s*$', re.IGNORECASE)
 RECENCY_WORD_PATTERN = re.compile(r'\b(latest|newest|most recent|last)\b', re.IGNORECASE)
+TICKER_PATTERN = re.compile(r'\b([A-Z]{2,5})\b')
+NON_TICKER_ALLCAPS = {
+    'CEO', 'CFO', 'CTO', 'COO', 'IPO', 'ETF', 'ETFS', 'AI', 'ATH', 'ATM', 'ROI', 'ROTH',
+    'US', 'USA', 'UK', 'EU', 'GDP', 'FED', 'SEC', 'NYSE', 'YOLO', 'FOMO', 'DIY', 'FAQ',
+    'OK', 'TV', 'PS', 'RIP', 'ASAP', 'FYI', 'LLC', 'INC',
+}
+
+
+def extract_ticker_keyword(question):
+    """Returns the first bare all-caps 2-5 letter word in the question that isn't a known
+    non-ticker acronym (see NON_TICKER_ALLCAPS above), or None. e.g. picks 'RH' out of
+    'how many shares of RH did Jeremy buy', but ignores 'CEO' in 'what does the CEO think'."""
+    for match in TICKER_PATTERN.finditer(question):
+        if match.group(1) not in NON_TICKER_ALLCAPS:
+            return match.group(1)
+    return None
 
 
 def wants_most_recent_mention(question):
@@ -380,15 +411,20 @@ def wants_most_recent_mention(question):
 
 def extract_stock_keyword(question):
     """Pulls a likely stock/topic keyword out of the question. Always catches 'X stock'
-    phrasing (e.g. 'wynn stock', 'AMD stock'). For recency-style questions only ('latest take
-    on X', 'most recent mention of X', 'projections for X') also falls back to whatever topic
-    is named at the very end of the question - broader and more false-positive-prone, so it's
-    deliberately gated to only the recency-question case rather than applying to every question
-    (which could risk dragging in an ILIKE-matched-but-not-actually-relevant chunk for a plain
-    topic question)."""
+    phrasing (e.g. 'wynn stock', 'AMD stock') and any bare ticker-style all-caps word
+    anywhere in the question (e.g. 'RH', 'AMD') - both are unambiguous enough to apply to
+    every question, not just recency-style ones. For recency-style questions only ('latest
+    take on X', 'most recent mention of X', 'projections for X') also falls back to whatever
+    topic is named at the very end of the question - broader and more false-positive-prone,
+    so it's deliberately gated to only the recency-question case rather than applying to every
+    question (which could risk dragging in an ILIKE-matched-but-not-actually-relevant chunk for
+    a plain topic question)."""
     match = STOCK_KEYWORD_PATTERN.search(question)
     if match:
         return match.group(1)
+    ticker = extract_ticker_keyword(question)
+    if ticker:
+        return ticker
     if wants_most_recent_mention(question):
         tail_match = TOPIC_TAIL_PATTERN.search(question)
         if tail_match:

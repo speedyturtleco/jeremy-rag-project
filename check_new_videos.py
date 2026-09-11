@@ -31,6 +31,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ---- Config: same channels as your other scripts ----
+# Added Eric Cuka Sep 11 - this script previously only covered Jeremy's 3 channels, so his
+# new videos were only ever caught by the automated daily GitHub Actions check
+# (auto_update.py), never by this manual home-run version. Same url/video_type as
+# auto_update.py's own Eric Cuka entry.
 CHANNELS = [
     {
         "url": "https://www.youtube.com/@FinancialEducation/videos",
@@ -46,6 +50,11 @@ CHANNELS = [
         "url": "https://www.youtube.com/@jeremylefebvremakesmoney7934/videos",
         "name": "Jeremy Lefebvre Makes Money",
         "video_type": "reaction",
+    },
+    {
+        "url": "https://www.youtube.com/@FiredUpWealth/videos",
+        "name": "Eric Cuka",
+        "video_type": "direct",
     },
 ]
 

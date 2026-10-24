@@ -753,7 +753,13 @@ if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
             chunks = search_transcripts(search_query, raw_question=prompt)
         top_channel = chunks[0].get('channel', '') if chunks else ''
         is_jeremy = top_channel in JEREMY_CHANNELS
-        spinner_text = 'Flipping your flapjacks... 🥞' if is_jeremy else 'Digging through the transcripts... 🔍'
+        is_eric = top_channel == 'Eric Cuka'
+        if is_jeremy:
+            spinner_text = 'Flipping your flapjacks... 🥞'
+        elif is_eric:
+            spinner_text = 'YOU! wanna know! '
+        else:
+            spinner_text = 'Digging through the transcripts... 🔍'
         with st.spinner(spinner_text):
             if chunks:
                 top_score = chunks[0].get('similarity', 0)

@@ -757,7 +757,7 @@ if prompt := st.chat_input("Ask anything about Jeremy's stock opinions..."):
         if is_jeremy:
             spinner_text = 'Flipping your flapjacks... 🥞'
         elif is_eric:
-            spinner_text = 'YOU! wanna know! '
+            spinner_text = 'YOU! 🫵 wanna know! '
         else:
             spinner_text = 'Digging through the transcripts... 🔍'
         with st.spinner(spinner_text):
